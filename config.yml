@@ -1,0 +1,54 @@
+app:
+  os: windows 
+  wireguard_path: C:\Program Files\WireGuard\wireguard.exe
+  wstunnel_path: wstunnel.exe
+  
+  #os: linux
+  #wireguard_path: wg_quick
+  #wstunnel_path: wstunnel-linux-x64 
+  
+  start_wireguard: true
+  start_wstunnel: true
+  
+  export_wireguard_conf: false # export temp conf to current directory
+    
+
+wstunnel:
+  # see https://github.com/erebe/wstunnel
+
+  # Required
+  server: wss://wss.server.example.com:443
+  localToRemote: 0.0.0.0:51820:127.0.0.1:51820
+  udp: true
+  udpTimeoutSec: -1
+  
+  # optional
+  #upgradeCredentials: user:pass 
+  #upgradePathPrefix: wstunnel
+  #hostHeader: wss.server.example.com
+  verbose: true
+
+wireguard:
+  # AllowedIPs must be set to 
+  # '0.0.0.0/1, ::/1, 8000::/1' on windows 
+  # to unblocked untunneled connection in order for wstunnel to work
+
+  # for linux a routing table rule is created using ip route
+  # Endpoint will be overwritten
+
+  # path to wireguard config. 'str' is ignored if set
+  #path: ./test.conf
+  
+  # wireguard config string
+  str: |
+    [Interface]
+    PrivateKey=
+    Address=
+    DNS=1.1.1.1, 8.8.8.8
+
+    [Peer]
+    PublicKey=
+    PresharedKey=
+    AllowedIPs = 0.0.0.0/1, ::/1, 8000::/1
+    PersistentKeepalive = 20
+    Endpoint = 127.0.0.1:51820
