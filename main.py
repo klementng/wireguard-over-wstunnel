@@ -17,7 +17,7 @@ import psutil
 import ctypes
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(levelname)s - %(message)s'
 )
 
@@ -128,29 +128,28 @@ def start_wireguard(wg_config_path):
     logger.info("Starting wireguard...")
     logger.info(f"Wireguard interface name: {interface_name}")
 
-    if config['app']['os'] == 'windows':
-        logger.warning(
-            "Untunneled connection are likely not blocked on windows.")
-        logger.warning(
-            "You will need to restart any application previously connected to the internet to utilize wireguard vpn")
-
-        os.system("\"%s\" /installtunnelservice %s" %
-                  (config["app"]["wireguard_path"], wg_config_path))
+    if config['app']['os'] == 'windows':        
+        command = '"%s" /installtunnelservice %s' % (config["app"]["wireguard_path"], wg_config_path)
     else:
-        os.system("%s up %s" %
-                  (config["app"]["wireguard_path"], wg_config_path))
+        command = '"%s" down %s' % (config["app"]["wireguard_path"], wg_config_path)
+    
+    logger.debug(command)
+    os.system(command)
 
 
 def stop_wireguard(wg_config_path):
     interface_name = os.path.basename(wg_config_path).replace('.conf', '')
     logger.info(f"Stopping wireguard interface: {interface_name}")
 
-    if config['app']['os'] == 'windows':
-        os.system("\"%s\" /uninstalltunnelservice %s" %
-                  (config["app"]["wireguard_path"], interface_name))
+    
+ 
+    if config['app']['os'] == 'windows':        
+        command = '"%s" /uninstalltunnelservice %s' % (config["app"]["wireguard_path"], interface_name)
     else:
-        os.system("%s down %s" %
-                  (config["app"]["wireguard_path"], wg_config_path))
+        command = '"%s" down %s' % (config["app"]["wireguard_path"], interface_name)
+    
+    logger.debug(command)
+    os.system(command)
 
     time.sleep(1)
 
@@ -173,13 +172,15 @@ def start_wstunnel():
             wst_args.append(f"{flag}{i}={wst_config[i]}")
 
     wst_args.append(wst_host)
+    logger.debug(wst_args)
 
-    return subprocess.Popen(wst_args)
+    return subprocess.Popen(wst_args,shell=True,stdout=subprocess.PIPE)
 
 
 def stop_wstunnel(process: subprocess.Popen):
     logger.info("Stopping wstunnel")
-    return process.kill()
+    process.kill()
+    time.sleep(1)
 
 
 def cleanup_tmpfile(tmpfile):
@@ -244,7 +245,9 @@ if __name__ == '__main__':
             shutil.copyfile(tmpfile.name, os.path.basename(tmpfile.name))
 
         atexit.register(cleanup_tmpfile, tmpfile)
-
+        
+        logger.info(f"Press CTRL + C to exit")
+        
         while True:
             time.sleep(5)
             res = requests.get("https://api.ipify.org")
@@ -257,10 +260,8 @@ if __name__ == '__main__':
                 else:
                     logger.info(f"Your Public IP is: {new_ip}")
                     break
-
-        logger.info(f"Press CTRL + C to exit")
-        while True:
-            pass
+        
+        while True: pass
 
     except (KeyboardInterrupt, SystemExit):
         pass

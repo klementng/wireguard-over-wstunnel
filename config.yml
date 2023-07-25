@@ -38,6 +38,7 @@ wireguard:
 
   # path to wireguard config. 'str' is ignored if set
   #path: ./test.conf
+  # Remember to change your AllowedIPs if you are using windows
   
   # wireguard config string
   str: |
