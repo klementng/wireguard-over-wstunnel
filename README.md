@@ -38,6 +38,10 @@ _Installing required packages_
    ```sh
    wget https://github.com/erebe/wstunnel/releases/download/v5.0/wstunnel-linux-x64
    ```
+5. Change permission on file
+   ```sh
+   chmod +x wstunnel-linux-x64
+   ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -67,7 +71,6 @@ optional arguments:
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
-<!-- LICENSE -->
 ## License
 
 Distributed under the MIT License. See `LICENSE.txt` for more information.

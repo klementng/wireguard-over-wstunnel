@@ -1,11 +1,11 @@
 app:
   os: windows 
   wireguard_path: C:\Program Files\WireGuard\wireguard.exe
-  wstunnel_path: wstunnel.exe
+  wstunnel_path: .\wstunnel.exe
   
   #os: linux
-  #wireguard_path: wg_quick
-  #wstunnel_path: wstunnel-linux-x64 
+  #wireguard_path: wg-quick #in $PATH
+  #wstunnel_path: ./wstunnel-linux-x64 
   
   start_wireguard: true
   start_wstunnel: true
@@ -33,7 +33,6 @@ wireguard:
   # '0.0.0.0/1, ::/1, 8000::/1' on windows 
   # to unblocked untunneled connection in order for wstunnel to work
 
-  # for linux a routing table rule is created using ip route
   # Endpoint will be overwritten
 
   # path to wireguard config. 'str' is ignored if set
@@ -50,6 +49,6 @@ wireguard:
     [Peer]
     PublicKey=
     PresharedKey=
-    AllowedIPs = 0.0.0.0/1, ::/1, 8000::/1
+    AllowedIPs = 0.0.0.0/0, ::/0, 8000::/0
     PersistentKeepalive = 20
     Endpoint = 127.0.0.1:51820
