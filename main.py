@@ -16,7 +16,6 @@ import logging
 import shutil
 import requests
 import netifaces
-from command_runner import elevate
 import ctypes
 import signal
 
