@@ -35,6 +35,10 @@ def configure_wstunnel():
     logger.info("Loading wstunnel config...")
 
     proto, host = config['wstunnel'].get('server').split("://")
+
+    if len(host.split(':')) == 2:
+        host, port = host.split(':')
+
     localToRemote = config['wstunnel'].get('localToRemote').split(':')
 
     if len(localToRemote) == 3:
@@ -125,9 +129,11 @@ def start_wireguard(wg_config_path):
     logger.info(f"Wireguard interface name: {interface_name}")
 
     if config['app']['os'] == 'windows':
-        logger.warning(f"Untunneled connection are likely not blocked on windows. \
-            You will need to restart any application previously connected to the internet to utilize wireguard vpn")
-        
+        logger.warning(
+            "Untunneled connection are likely not blocked on windows.")
+        logger.warning(
+            "You will need to restart any application previously connected to the internet to utilize wireguard vpn")
+
         os.system("\"%s\" /installtunnelservice %s" %
                   (config["app"]["wireguard_path"], wg_config_path))
     else:
@@ -189,40 +195,42 @@ if __name__ == '__main__':
         '--config', '-c', help="Path to program config", default='./config.yml')
     args = parser.parse_args()
 
-    logger.info("Loading app config...")
-    with open(args.config) as f:
-        config = yaml.full_load(f)
+    try:
+        logger.info("Loading app config...")
+        with open(args.config) as f:
+            config = yaml.full_load(f)
 
-    # Force elevation
-    if config['app']['os'] == 'windows':
-        if not ctypes.windll.shell32.IsUserAnAdmin():
-            ctypes.windll.shell32.ShellExecuteW(
-                None, "runas", sys.executable, " ".join(sys.argv), None, 1)
-            exit(0)
+        # Force elevation
+        if config['app']['os'] == 'windows':
+            if not ctypes.windll.shell32.IsUserAnAdmin():
+                ctypes.windll.shell32.ShellExecuteW(
+                    None, "runas", sys.executable, " ".join(sys.argv), None, 1)
+                exit(0)
 
-    elif config['app']['os'] == 'linux':
-        if os.geteuid() != 0:
-            logger.fatal("You need to run this program as root / sudo")
+        elif config['app']['os'] == 'linux':
+            if os.geteuid() != 0:
+                logger.fatal("You need to run this program as root / sudo")
+                exit(1)
+
+        else:
+            logger.fatal("Unsupported Platform")
             exit(1)
 
-    else:
-        logger.fatal("Unsupported Platform")
-        exit(1)
+        # disconnect old connections
+        for i in psutil.net_if_addrs().keys():
+            if i.startswith('wg-wst'):
+                stop_wireguard(i)
 
-    # disconnect old connections
-    for i in psutil.net_if_addrs().keys():
-        if i.startswith('wg-wst'):
-            stop_wireguard(i)
+        if args.action == 'clean':
+            input("Press any key to exit...")
+            exit(0)
 
-    if args.action == 'clean':
-        input("Press any key to exit...")
-        exit(0)
+        old_ip = requests.get("https://api.ipify.org").text
 
-    wst_endpoint_ip, wst_listen_ip, wst_listen_port = configure_wstunnel()
-    tmpfile, wg_config = configure_wireguard(
-        wst_endpoint_ip, wst_listen_ip, wst_listen_port)
+        wst_endpoint_ip, wst_listen_ip, wst_listen_port = configure_wstunnel()
 
-    try:
+        tmpfile, wg_config = configure_wireguard(
+            wst_endpoint_ip, wst_listen_ip, wst_listen_port)
 
         if config['app']['start_wireguard'] == True:
             start_wireguard(tmpfile.name)
@@ -238,20 +246,28 @@ if __name__ == '__main__':
         atexit.register(cleanup_tmpfile, tmpfile)
 
         while True:
-            time.sleep(3)
+            time.sleep(5)
             res = requests.get("https://api.ipify.org")
 
             if res.status_code == 200:
-                logger.info(f"Your Public IP is: {res.text}")
-                break
+                new_ip = res.text
 
-            else:
-                logger.warning("Health Check failed!")
+                if old_ip == new_ip:
+                    logger.warning(f"Health Check failed! Your new ip = old ip: {new_ip}")
+                else:
+                    logger.info(f"Your Public IP is: {new_ip}")
+                    break
 
         logger.info(f"Press CTRL + C to exit")
         while True:
             pass
 
-    except KeyboardInterrupt:
-        logger.info(f"Exiting...")
+    except (KeyboardInterrupt, SystemExit):
+        pass
 
+    except:
+        logger.critical("Caught an exception", exc_info=True)
+
+    finally:
+        input('Press any key to exit')
+        logger.info(f"Exiting...")
