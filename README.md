@@ -32,7 +32,7 @@ _Installing required packages_
    ```
 3. Install required packages
    ```sh
-   pip install -r requirements.text 
+   pip install -r requirements.txt 
    ```
 4. Download [wstunnel](https://github.com/erebe/wstunnel/releases/)
    ```sh
