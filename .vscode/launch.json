@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "main",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "args": ["--config","config.yml","--log_level","DEBUG"],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+        }
+    ]
+}
