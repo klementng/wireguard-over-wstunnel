@@ -46,7 +46,7 @@ class WStunnel:
         if len(host.split(':')) == 2:
             host, endpoint_port = host.split(':')
         else:
-            endpoint_ip = 443 if proto == 'wss://' else 80
+            endpoint_port = 443 if proto == 'wss://' else 80
         
         logger.info(f"[wstunnel] Looking up DNS / Validating IP for: '{host}'")
         endpoint_ip = socket.gethostbyname(host)
