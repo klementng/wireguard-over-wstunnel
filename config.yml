@@ -1,15 +1,26 @@
 app:
-  os: windows 
+  # For windows systems
   wireguard_path: C:\Program Files\WireGuard\wireguard.exe
   wstunnel_path: .\wstunnel.exe # download from https://github.com/erebe/wstunnel/releases
   
-  #os: linux
+  # For linux systems
   #wireguard_path: wg-quick #find in $PATH
   #wstunnel_path: ./wstunnel-linux-x64 
   
   start_wireguard: true
   start_wstunnel: true
   
+  # Miscellaneous settings
+  
+  # Interval in secs to send a ping to wstunnel server. 
+  # Restart wstunnel if ping fails. set 0 to disable. 
+  # Set a lower value if you switch network often
+  healthcheck_wst_interval: 30 
+  
+  # Number of tries to fetch public IP, set 0 to disable
+  healthcheck_ip_tries: 5
+
+
   export_wireguard_conf: false # export temp conf to current directory
     
 

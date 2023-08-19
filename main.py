@@ -14,7 +14,9 @@ import subprocess
 import sys
 import tempfile
 import time
+import json
 
+import platform
 import psutil
 import requests
 import wgconfig
@@ -35,7 +37,7 @@ class WStunnel:
     def __init__(self, gconfig) -> None:
         logger.info("[wstunnel] Loading config...")
 
-        # Attributes 
+        # Attributes
         self.exec_path = gconfig['app']['wstunnel_path']
         self.args = gconfig['wstunnel']
         self.process = None
@@ -47,10 +49,9 @@ class WStunnel:
             host, endpoint_port = host.split(':')
         else:
             endpoint_port = 443 if proto == 'wss://' else 80
-        
-        logger.info(f"[wstunnel] Looking up DNS / Validating IP for: '{host}'")
-        endpoint_ip = socket.gethostbyname(host)
-        
+
+        endpoint_ip = self._lookup_host(host)
+
         self.server = f"{proto}://{endpoint_ip}:{endpoint_port}"
         self.args.setdefault('hostHeader', host)
         self.endpoint_ip = endpoint_ip
@@ -65,17 +66,18 @@ class WStunnel:
         local_server = self.args.get(
             'localToRemote',
             self.args.get('L',
-                self.args.get("dynamicToRemote",
-                        self.args.get('D')
-        )))
+                          self.args.get("dynamicToRemote",
+                                        self.args.get('D')
+                                        )))
 
         if local_server == None:
-            logger.fatal("[wstunnel] Local listening server is not set, expected either ('localToRemote', 'L', 'dynamicToRemote', 'D')")
+            logger.fatal(
+                "[wstunnel] Local listening server is not set, expected either ('localToRemote', 'L', 'dynamicToRemote', 'D')")
             sys.exit(1)
 
         local_server = local_server.split(":")
 
-        if len(local_server) == 1 or len(local_server) ==3:
+        if len(local_server) == 1 or len(local_server) == 3:
             listen_port = local_server[0]
             listen_ip = '0.0.0.0'
         else:
@@ -88,6 +90,42 @@ class WStunnel:
         logger.info(
             f"[wstunnel] listening on: {listen_ip}:{listen_port}")
 
+    def _lookup_host(self, host: str):
+        logger.info(f"[wstunnel] Looking up DNS / Validating IP for: '{host}'")
+
+        if not os.path.exists("dns.json"):
+            with open('dns.json', 'w') as f:
+                f.write(r"{}")
+
+        with open("dns.json", 'r+') as f:
+            txt = f.read()
+            f.seek(0)
+
+            if txt == '':
+                dns_json = {}
+            else:
+                dns_json = json.loads(txt)
+
+            try:
+                ip = socket.gethostbyname(host)
+                dns_json.update({host: ip})
+
+            except:
+                logger.warning(
+                    f"[wstunnel] DNS Lookup: Failed! Looking up cached entries for '{host}'")
+                ip = dns_json.get(host)
+
+                if ip == None:
+                    logger.critical(
+                        f"[wstunnel] DNS Lookup: Unable to automatically determine ip for '{host}'. To resolve,")
+                    logger.critical(
+                        f'[wstunnel] 1) Edit the server/hostHeader with ip address of {host} OR')
+                    logger.critical(
+                        '[wstunnel] 2) Create a dns.json file with the following content: \'{"{}":"123.4.5.6"}\''.format(host))
+                    sys.exit(1)
+
+            json.dump(dns_json, f)
+            return ip
 
     def start(self):
         logger.info("[wstunnel] Starting wstunnel...")
@@ -121,6 +159,11 @@ class WStunnel:
             time.sleep(1)
             logger.info("[wstunnel] Stopped!")
 
+    def restart(self):
+        logger.info("[wstunnel] Restarting...")
+        self.stop()
+        self.start()
+
     def cleanup(self):
         self.stop()
 
@@ -129,7 +172,7 @@ class Wireguard:
 
     def __init__(self, gconfig, wst: WStunnel) -> None:
         self.tmp_dir = tempfile.mkdtemp()
-        self.os = gconfig['app']["os"]
+        self.os = platform.system().lower()
         self.exec_path = gconfig["app"]["wireguard_path"]
 
         logger.info("[wireguard] Loading config...")
@@ -167,11 +210,12 @@ class Wireguard:
         allowed_ips = []
         peer_id = list(wg_config.peers.keys())[0]
 
-        logger.info(f"[wireguard] Allowing outgoing connection to {wst.endpoint_ip}")
+        logger.info(
+            f"[wireguard] Allowing outgoing connection to {wst.endpoint_ip}")
 
         for ips in wg_config.peers[peer_id]["AllowedIPs"]:
 
-            if ips == "::/0" and gconfig['app']["os"] == 'windows':
+            if ips == "::/0" and self.os == 'windows':
                 logger.info(
                     "[wireguard] OS == windows, skipping AllowedIPs '::/0'")
                 continue
@@ -183,11 +227,13 @@ class Wireguard:
                     map(str, net1.address_exclude(net2))
                 )
             except (TypeError, ValueError) as e:
-                logger.warning(f"[wireguard] {e} - Appending {net1} to AllowedIPs anyways")
+                logger.warning(
+                    f"[wireguard] {e} - Appending {net1} to AllowedIPs anyways")
                 allowed_ips.append(ips)
 
-        if gconfig['app']["os"] == 'windows':
-            logger.info("[wireguard] OS == windows, adding ['::/1','8000::/1'] to AllowedIPs")
+        if self.os == 'windows':
+            logger.info(
+                "[wireguard] OS == windows, adding ['::/1','8000::/1'] to AllowedIPs")
             allowed_ips.extend(["::/1", "8000::/1"])
 
         logger.debug(allowed_ips)
@@ -207,8 +253,6 @@ class Wireguard:
 
         wg_config.write_file(self.tmp_conf)
 
-
-
         self.wg_config = wg_config
         self.wst = wst
         self.started = False
@@ -219,30 +263,34 @@ class Wireguard:
             logger.debug(f"{i} == {self.interface}: {i == self.interface}")
 
             if i == self.interface:
-                logger.warning(f"[wireguard] The interface '{self.interface}' exist this may be due to improperly stopped program or another instance is running. Attempting automatic removal")
+                logger.warning(
+                    f"[wireguard] The interface '{self.interface}' exist this may be due to improperly stopped program or another instance is running. Attempting automatic removal")
                 self.stop()
 
             elif i.startswith('wg-wst'):
                 if self.os == 'windows':
-                    logger.warning(f"[wireguard] Found orphan '{self.interface}' interface attempting automatic removal...")
+                    logger.warning(
+                        f"[wireguard] Found orphan '{self.interface}' interface attempting automatic removal...")
                     subprocess.run([
                         self.exec_path, '/uninstalltunnelservice', i], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 else:
                     logger.warning(
                         f"[wireguard] Unable to automatically remove wireguard interface:{i}")
-        
+
         time.sleep(3)
 
     def start(self):
 
-        if not ("L" in self.wst.args or "localToRemote" in self.wst.args) : 
-            logger.fatal("[wireguard] Unable to start wireguard. wstunnel must be started in 'L' or 'localToRemote' mode")
+        if not ("L" in self.wst.args or "localToRemote" in self.wst.args):
+            logger.fatal(
+                "[wireguard] Unable to start wireguard. wstunnel must be started in 'L' or 'localToRemote' mode")
             sys.exit(1)
-        
+
         if not ('udp' in self.wst.args or 'U' in self.wst.args):
-            logger.fatal("[wireguard] Unable to start wireguard. wstunnel must be started in 'udp' or 'U' mode")
+            logger.fatal(
+                "[wireguard] Unable to start wireguard. wstunnel must be started in 'udp' or 'U' mode")
             sys.exit(1)
-        
+
         logger.info(f"[wireguard] Starting {self.interface}...")
 
         self.remove_orphan_iface()
@@ -308,8 +356,11 @@ class Wireguard:
             shutil.rmtree(self.tmp_dir)
 
 
-def elevate_user(user_os):
+def elevate_user():
+    user_os = platform.system().lower()
     logger.info("[app] Elevating to superuser / admin")
+    logger.debug(f"[app] Detected OS: {user_os}")
+
     if user_os == 'windows':
         if not ctypes.windll.shell32.IsUserAnAdmin():
             ctypes.windll.shell32.ShellExecuteW(
@@ -333,25 +384,76 @@ def get_public_ip(timeout=5):
         return res.text
 
     except Exception as e:
-        logger.warning(f"[app] Unable to fetch Public IP")
+        logger.debug(f"[app] Unable to fetch Public IP")
         logger.debug(e)
         return None
 
 
-def healthy(old_ip):
-    new_ip = get_public_ip()
+def healthcheck_ip(old_ip, sleep=10, max_it=5):
 
-    if new_ip == None:
-        return False
+    for _ in range(max_it):
+        time.sleep(sleep)
+        new_ip = get_public_ip(1)
 
-    elif old_ip == new_ip:
-        logger.warning(
-            f"[app] Health Check Failed! Your new_ip:{new_ip} = old_ip:{old_ip}")
+        if new_ip == None:
+            logger.warning(
+                f"[app] Health Check IP: Failed! Unable to fetch Public IP")
 
-        return False
-    else:
-        logger.info(f"[app] Your new Public IP is: {new_ip}")
-        return True
+            continue
+
+        elif old_ip == None and new_ip != None:
+            logger.warning(
+                f"[app] Health Check IP: Unknown Status! Unable to compare old_ip:{old_ip} with new_ip:{new_ip}")
+
+            return True
+
+        elif old_ip == new_ip:
+            logger.warning(
+                f"[app] Health Check IP: Failed! Your new_ip:{new_ip} = old_ip:{old_ip}")
+
+            continue
+
+        else:
+            logger.info(
+                f"[app] Health Check IP: Success! Your new Public IP is: {new_ip}")
+
+            return True
+
+    logger.warning(
+        f"[app] Health Check IP: Max iteration reached! Discontinuing IP health check.")
+
+    return False
+
+
+def healthcheck_wst(wstunnel: WStunnel, interval=60, restart_wstunnel=True):
+
+    while True:
+
+        if interval != 0:
+            time.sleep(interval)
+
+            servers = [wstunnel.endpoint_ip, '1.1.1.1', '8.8.8.8', 'www.google.com']
+            flag = '-n' if platform.system().lower() == 'windows' else '-c'
+
+            for s in servers:
+                res = subprocess.call(
+                    ["ping", flag, '1', s], stdout=subprocess.PIPE)
+                
+                if res == 0:
+                    logger.debug(f"[app] Health Check Ping: Success! Server: {s}")
+                    break
+            
+            if res != 0:
+                logger.warning(
+                    f"[app] Health Check Ping: Failed! Unable to ping {servers}")
+
+                if restart_wstunnel:
+                    logger.warning(
+                        f"[app] Health Check Ping: Restarting wstunnel...")
+
+                    wstunnel.restart()
+        else:
+            time.sleep(9999)
 
 
 # Global !!!
@@ -368,7 +470,8 @@ def cleanup():
         p.cleanup()
 
     logger.info("[app] Cleanup Complete!")
-    logger.info("[app] Exiting in 10s. Press CTRL + C to stop, spam it to exit now")
+    logger.info(
+        "[app] Exiting in 10s. Press CTRL + C to stop, spam it to exit now")
 
     try:
         signal.signal(signal.SIGINT, s1)
@@ -388,16 +491,16 @@ if __name__ == '__main__':
         '--clean', help="Clean wireguard tunnel that are not properly stopped", action='store_true')
     parser.add_argument(
         '--log_level', help="Set logging level", default='INFO')
+
     args = parser.parse_args()
 
     logger.setLevel(args.log_level)
-
     logger.info("[app] Loading app config...")
 
     with open(args.config) as f:
         config = yaml.full_load(f)
 
-    elevate_user(config['app']['os'])
+    elevate_user()
 
     try:
         wstunnel = WStunnel(config)
@@ -410,7 +513,8 @@ if __name__ == '__main__':
             sys.exit(0)
 
         logger.info("[app] Fetching current Public IP...")
-        old_ip = get_public_ip(1)
+        
+        old_ip = get_public_ip(0.5) if config['app']['healthcheck_ip_tries'] != 0 else None
 
         if config['app']['start_wireguard'] == True:
 
@@ -427,11 +531,8 @@ if __name__ == '__main__':
 
         logger.info(f"[app] Press CTRL + C to exit")
 
-        time.sleep(3)
-        while not healthy(old_ip):
-            time.sleep(30)
-        while True:
-            time.sleep(9999)
+        healthcheck_ip(old_ip, max_it=config['app']['healthcheck_ip_tries'])
+        healthcheck_wst(wstunnel, config['app']['healthcheck_wst_interval'])
 
     except (KeyboardInterrupt, SystemExit):
         pass
