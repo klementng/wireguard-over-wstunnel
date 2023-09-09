@@ -436,7 +436,7 @@ def healthcheck_ip(old_ip, sleep=5, max_it=5):
 
         elif old_ip == None and new_ip != None:
             logger.warning(
-                f"[app] Health Check IP: Unknown Status! Unable to compare old_ip:{old_ip} with new_ip:{new_ip}")
+                f"[app] Health Check IP: Unknown Status! Unable to compare old_ip:{old_ip} with new_ip:{new_ip}. Your traffic may not be tunneled!")
 
             return True
 
