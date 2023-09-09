@@ -442,7 +442,7 @@ def healthcheck_ip(old_ip, sleep=5, max_it=5):
 
         elif old_ip == new_ip:
             logger.warning(
-                f"[app] Health Check IP: Failed! Your new_ip:{new_ip} = old_ip:{old_ip}")
+                f"[app] Health Check IP: Failed! Your new_ip:{new_ip} = old_ip:{old_ip}. Your traffic may not be tunneled!")
 
             continue
 
