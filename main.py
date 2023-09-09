@@ -37,8 +37,23 @@ class WStunnel:
     def __init__(self, gconfig) -> None:
         logger.info("[wstunnel] Loading config...")
 
-        # Attributes
-        self.exec_path = gconfig['app']['wstunnel_path']
+        self.os = platform.system().lower()
+
+        try:
+            self.exec_path = gconfig["app"]["wstunnel_path"]
+        except KeyError:
+            if self.os == 'windows':
+                logger.info("[wstunnel] 'wstunnel_path' key is not set. Setting wstunnel_path to '.\wstunnel.exe'")
+                self.exec_path = ".\wstunnel.exe"
+            
+            elif self.os == 'linux':
+                logger.info("[wstunnel] 'wstunnel_path' key is not set. Setting wstunnel_path to './wstunnel-linux-x64'")
+                self.exec_path = "./wstunnel-linux-x64"
+            
+            else:
+                logger.critical(f"[wstunnel] Unknown/Unsupported OS: '{self.os}', please manually set 'wstunnel_path' key under 'app' section")
+                sys.exit(1)
+                
         self.args = gconfig['wstunnel']
         self.process = None
 
@@ -148,9 +163,13 @@ class WStunnel:
         logger.debug(wst_args)
 
         self.process = subprocess.Popen(wst_args, stdout=subprocess.PIPE)
-        logger.info("[wstunnel] Started wstunnel!")
-
-        return True
+        time.sleep(0.1)
+        if self.process.poll() == None:        
+            logger.info("[wstunnel] Started wstunnel!")
+            return True
+        else:
+            logger.critical("[wstunnel] Unable to start wstunnel.")
+            return False
 
     def stop(self):
         if self.process != None:
@@ -173,8 +192,22 @@ class Wireguard:
     def __init__(self, gconfig, wst: WStunnel) -> None:
         self.tmp_dir = tempfile.mkdtemp()
         self.os = platform.system().lower()
-        self.exec_path = gconfig["app"]["wireguard_path"]
 
+        try:
+            self.exec_path = gconfig["app"]["wireguard_path"]
+        except KeyError:
+            if self.os == 'windows':
+                logger.info("[wireguard] 'wireguard_path' key is not set. Using default wireguard path at 'C:\Program Files\WireGuard\wireguard.exe'")
+                self.exec_path = "C:\Program Files\WireGuard\wireguard.exe"
+            
+            elif self.os == 'linux':
+                logger.info("[wireguard] 'wireguard_path' key is not set. Using default wireguard path at '/usr/bin/wg-quick'")
+                self.exec_path = "/usr/bin/wg-quick"
+            
+            else:
+                logger.critical(f"[wireguard] Unknown/Unsupported OS: '{self.os}', please manually set 'wireguard_path' key under 'app' section")
+                sys.exit(1)
+                
         logger.info("[wireguard] Loading config...")
 
         if gconfig['wireguard'].get('path'):
@@ -514,7 +547,7 @@ if __name__ == '__main__':
 
         logger.info("[app] Fetching current Public IP...")
         
-        old_ip = get_public_ip(0.5) if config['app']['healthcheck_ip_tries'] != 0 else None
+        old_ip = get_public_ip(1) if config['app']['healthcheck_ip_tries'] != 0 else None
 
         if config['app']['start_wireguard'] == True:
 

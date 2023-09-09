@@ -1,11 +1,11 @@
 app:
   # For windows systems
-  wireguard_path: C:\Program Files\WireGuard\wireguard.exe
-  wstunnel_path: .\wstunnel.exe # download from https://github.com/erebe/wstunnel/releases
+  # wireguard_path: C:\Program Files\WireGuard\wireguard.exe
+  # wstunnel_path: .\wstunnel.exe # download from https://github.com/erebe/wstunnel/releases
   
   # For linux systems
   #wireguard_path: wg-quick #find in $PATH
-  #wstunnel_path: ./wstunnel-linux-x64 
+  #wstunnel_path: ./wstunnel-linux-x64 # download from https://github.com/erebe/wstunnel/releases
   
   start_wireguard: true
   start_wstunnel: true
