@@ -465,7 +465,7 @@ def healthcheck_wst(wstunnel: WStunnel, interval=60, restart_wstunnel=True):
         if interval != 0:
             time.sleep(interval)
 
-            servers = [wstunnel.endpoint_ip, '1.1.1.1', '8.8.8.8', 'www.google.com']
+            servers = [wstunnel.endpoint_ip, '1.1.1.1', '8.8.8.8']
             flag = '-n' if platform.system().lower() == 'windows' else '-c'
 
             for s in servers:
