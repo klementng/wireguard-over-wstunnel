@@ -422,7 +422,7 @@ def get_public_ip(timeout=5):
         return None
 
 
-def healthcheck_ip(old_ip, sleep=10, max_it=5):
+def healthcheck_ip(old_ip, sleep=5, max_it=5):
 
     for _ in range(max_it):
         time.sleep(sleep)
