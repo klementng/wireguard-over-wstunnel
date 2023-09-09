@@ -430,7 +430,7 @@ def healthcheck_ip(old_ip, sleep=5, max_it=5):
 
         if new_ip == None:
             logger.warning(
-                f"[app] Health Check IP: Failed! Unable to fetch Public IP")
+                f"[app] Health Check IP: Failed! Unable to fetch Public IP. Your traffic may not be tunneled!")
 
             continue
 
