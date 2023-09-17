@@ -29,6 +29,8 @@ logging.basicConfig(
 
 # global variables
 
+SYSTEM_OS = platform.system().lower()
+active_processes = []
 logger = logging.getLogger()
 
 
@@ -37,21 +39,19 @@ class WStunnel:
     def __init__(self, gconfig) -> None:
         logger.info("[wstunnel] Loading config...")
 
-        self.os = platform.system().lower()
-
         try:
             self.exec_path = gconfig["app"]["wstunnel_path"]
         except KeyError:
-            if self.os == 'windows':
+            if SYSTEM_OS == 'windows':
                 logger.info("[wstunnel] 'wstunnel_path' key is not set. Setting wstunnel_path to '.\wstunnel.exe'")
                 self.exec_path = ".\wstunnel.exe"
             
-            elif self.os == 'linux':
+            elif SYSTEM_OS == 'linux':
                 logger.info("[wstunnel] 'wstunnel_path' key is not set. Setting wstunnel_path to './wstunnel-linux-x64'")
                 self.exec_path = "./wstunnel-linux-x64"
             
             else:
-                logger.critical(f"[wstunnel] Unknown/Unsupported OS: '{self.os}', please manually set 'wstunnel_path' key under 'app' section")
+                logger.critical(f"[wstunnel] Unknown/Unsupported OS: '{SYSTEM_OS}', please manually set 'wstunnel_path' key under 'app' section")
                 sys.exit(1)
                 
         self.args = gconfig['wstunnel']
@@ -93,17 +93,14 @@ class WStunnel:
         local_server = local_server.split(":")
 
         if len(local_server) == 1 or len(local_server) == 3:
-            listen_port = local_server[0]
-            listen_ip = '0.0.0.0'
+            self.listen_port = local_server[0]
+            self.listen_ip = '0.0.0.0'
         else:
-            listen_port = local_server[1]
-            listen_ip = local_server[0]
-
-        self.listen_port = listen_port
-        self.listen_ip = listen_ip
+            self.listen_port = local_server[1]
+            self.listen_ip = local_server[0]
 
         logger.info(
-            f"[wstunnel] listening on: {listen_ip}:{listen_port}")
+            f"[wstunnel] listening on: {self.listen_ip}:{self.listen_port}")
 
     def _lookup_host(self, host: str):
         logger.info(f"[wstunnel] Looking up DNS / Validating IP for: '{host}'")
@@ -144,10 +141,10 @@ class WStunnel:
 
     def start(self):
         logger.info("[wstunnel] Starting wstunnel...")
-        self.args = config['wstunnel']
 
         wst_args = [self.exec_path]
         wst_host = self.server
+
         for i in self.args.keys():
 
             flag = '-' if len(i) == 1 else '--'
@@ -163,6 +160,7 @@ class WStunnel:
         logger.debug(wst_args)
 
         self.process = subprocess.Popen(wst_args, stdout=subprocess.PIPE)
+        
         time.sleep(0.1)
         if self.process.poll() == None:        
             logger.info("[wstunnel] Started wstunnel!")
@@ -191,21 +189,20 @@ class Wireguard:
 
     def __init__(self, gconfig, wst: WStunnel) -> None:
         self.tmp_dir = tempfile.mkdtemp()
-        self.os = platform.system().lower()
 
         try:
             self.exec_path = gconfig["app"]["wireguard_path"]
         except KeyError:
-            if self.os == 'windows':
+            if SYSTEM_OS == 'windows':
                 logger.info("[wireguard] 'wireguard_path' key is not set. Using default wireguard path at 'C:\Program Files\WireGuard\wireguard.exe'")
                 self.exec_path = "C:\Program Files\WireGuard\wireguard.exe"
             
-            elif self.os == 'linux':
+            elif SYSTEM_OS == 'linux':
                 logger.info("[wireguard] 'wireguard_path' key is not set. Using default wireguard path at '/usr/bin/wg-quick'")
                 self.exec_path = "/usr/bin/wg-quick"
             
             else:
-                logger.critical(f"[wireguard] Unknown/Unsupported OS: '{self.os}', please manually set 'wireguard_path' key under 'app' section")
+                logger.critical(f"[wireguard] Unknown/Unsupported OS: '{SYSTEM_OS}', please manually set 'wireguard_path' key under 'app' section")
                 sys.exit(1)
                 
         logger.info("[wireguard] Loading config...")
@@ -214,7 +211,7 @@ class Wireguard:
 
             if gconfig['wireguard'].get('str') != None:
                 logger.warning(
-                    "[wireguard] 'path' is set. The 'str' is ignored")
+                    "[wireguard] 'path' key is set. The 'str' key is ignored")
 
             with open(gconfig['wireguard']['path']) as f:
                 logger.info(
@@ -248,7 +245,7 @@ class Wireguard:
 
         for ips in wg_config.peers[peer_id]["AllowedIPs"]:
 
-            if ips == "::/0" and self.os == 'windows':
+            if ips == "::/0" and SYSTEM_OS == 'windows':
                 logger.info(
                     "[wireguard] OS == windows, skipping AllowedIPs '::/0'")
                 continue
@@ -264,7 +261,7 @@ class Wireguard:
                     f"[wireguard] {e} - Appending {net1} to AllowedIPs anyways")
                 allowed_ips.append(ips)
 
-        if self.os == 'windows':
+        if SYSTEM_OS == 'windows':
             logger.info(
                 "[wireguard] OS == windows, adding ['::/1','8000::/1'] to AllowedIPs")
             allowed_ips.extend(["::/1", "8000::/1"])
@@ -301,7 +298,7 @@ class Wireguard:
                 self.stop()
 
             elif i.startswith('wg-wst'):
-                if self.os == 'windows':
+                if SYSTEM_OS == 'windows':
                     logger.warning(
                         f"[wireguard] Found orphan '{self.interface}' interface attempting automatic removal...")
                     subprocess.run([
@@ -328,7 +325,7 @@ class Wireguard:
 
         self.remove_orphan_iface()
 
-        if self.os == 'windows':
+        if SYSTEM_OS == 'windows':
             action = "/installtunnelservice"
         else:
             action = 'up'
@@ -352,7 +349,7 @@ class Wireguard:
     def stop(self):
         logger.info(f"[wireguard] Stopping {self.interface}...")
 
-        if self.os == 'windows':
+        if SYSTEM_OS == 'windows':
             action = "/uninstalltunnelservice"
             path = self.interface
         else:
@@ -390,23 +387,22 @@ class Wireguard:
 
 
 def elevate_user():
-    user_os = platform.system().lower()
     logger.info("[app] Elevating to superuser / admin")
-    logger.debug(f"[app] Detected OS: {user_os}")
 
-    if user_os == 'windows':
+    if SYSTEM_OS == 'windows':
         if not ctypes.windll.shell32.IsUserAnAdmin():
             ctypes.windll.shell32.ShellExecuteW(
                 None, "runas", sys.executable, " ".join(sys.argv), None, 1)
             sys.exit(0)
 
-    elif user_os == 'linux':
+    elif SYSTEM_OS == 'linux':
         if os.geteuid() != 0:
             os.system("sudo echo")
 
     else:
-        logger.fatal("[app] Unsupported Platform")
-        sys.exit(1)
+        if os.geteuid() != 0:
+            logger.fatal("[app] Unknown/Unsupported OS. Please program run as superuser")
+            sys.exit(1)
 
 
 def get_public_ip(timeout=5):
@@ -489,33 +485,6 @@ def healthcheck_wst(wstunnel: WStunnel, interval=60, restart_wstunnel=True):
             time.sleep(9999)
 
 
-# Global !!!
-processes = []
-
-
-@atexit.register
-def cleanup():
-    s1 = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
-
-    logger.info("[app] Cleaning Up...")
-    for p in processes:
-        p.cleanup()
-
-    logger.info("[app] Cleanup Complete!")
-    logger.info(
-        "[app] Exiting in 10s. Press CTRL + C to stop, spam it to exit now")
-
-    try:
-        signal.signal(signal.SIGINT, s1)
-        time.sleep(10)
-    except:
-        try:
-            input("***** Press Enter or CTRL + C to Exit *****")
-        except:
-            pass
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Wireguard over wstunnel")
     parser.add_argument(
@@ -527,11 +496,13 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    logger.setLevel(args.log_level)
-    logger.info("[app] Loading app config...")
+    logger.setLevel(args.log_level)    
 
     with open(args.config) as f:
+        logger.info("[app] Loading app config...")
         config = yaml.full_load(f)
+
+    logger.info(f"[app] Detected OS: {SYSTEM_OS}")
 
     elevate_user()
 
@@ -552,12 +523,12 @@ if __name__ == '__main__':
         if config['app']['start_wireguard'] == True:
 
             if wireguard.start() == True:
-                processes.append(wireguard)
+                active_processes.append(wireguard)
 
         if config['app']['start_wstunnel'] == True:
 
             if wstunnel.start() == True:
-                processes.append(wstunnel)
+                active_processes.append(wstunnel)
 
         if config['app']['export_wireguard_conf'] == True:
             wireguard.save()
@@ -572,3 +543,25 @@ if __name__ == '__main__':
 
     except:
         logger.critical("[app] Caught an exception. exiting...", exc_info=True)
+
+@atexit.register
+def cleanup():
+    s1 = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+
+    logger.info("[app] Cleaning Up...")
+    for p in active_processes:
+        p.cleanup()
+
+    logger.info("[app] Cleanup Complete!")
+    logger.info(
+        "[app] Exiting in 10s. Press CTRL + C to stop, spam it to exit now")
+
+    try:
+        signal.signal(signal.SIGINT, s1)
+        time.sleep(10)
+    except:
+        try:
+            input("***** Press Enter or CTRL + C to Exit *****")
+        except:
+            pass
