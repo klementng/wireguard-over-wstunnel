@@ -272,8 +272,7 @@ class Wireguard:
         wg_config.del_attr(peer_id, "AllowedIPs")
         wg_config.add_attr(peer_id, "AllowedIPs", allowed_ips)
 
-        if wst.listen_ip == '0.0.0.0':
-            listen_ip = '127.0.0.1'
+        listen_ip = '127.0.0.1' if wst.listen_ip == '0.0.0.0' else wst.listen_ip
 
         logger.info(
             f"[wireguard] Changing endpoint to {listen_ip}:{wst.listen_port}")
