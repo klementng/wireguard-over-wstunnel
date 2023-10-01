@@ -48,7 +48,7 @@ class WStunnel:
             
             elif SYSTEM_OS == 'linux':
                 logger.info("[wstunnel] 'wstunnel_path' key is not set. Setting wstunnel_path to './wstunnel-linux-x64'")
-                self.exec_path = "./wstunnel-linux-x64"
+                self.exec_path = "./wstunnel"
             
             else:
                 logger.critical(f"[wstunnel] Unknown/Unsupported OS: '{SYSTEM_OS}', please manually set 'wstunnel_path' key under 'app' section")
