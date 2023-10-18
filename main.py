@@ -47,7 +47,7 @@ class WStunnel:
                 self.exec_path = ".\wstunnel.exe"
             
             elif SYSTEM_OS == 'linux':
-                logger.info("[wstunnel] 'wstunnel_path' key is not set. Setting wstunnel_path to './wstunnel-linux-x64'")
+                logger.info("[wstunnel] 'wstunnel_path' key is not set. Setting wstunnel_path to './wstunnel'")
                 self.exec_path = "./wstunnel"
             
             else:
