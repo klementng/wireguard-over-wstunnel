@@ -5,16 +5,20 @@ app:
   
   # For linux systems
   #wireguard_path: wg-quick #find in $PATH
-  #wstunnel_path: ./wstunnel-linux-x64 # download from https://github.com/erebe/wstunnel/releases
+  #wstunnel_path: ./wstunnel # download from https://github.com/erebe/wstunnel/releases
   
   start_wireguard: true
-  start_wstunnel: true
+  start_wstunnel: false
   
   # Miscellaneous settings
+
+  # Automatic exit timer
+  exit_timer: 3
   
   # Interval in secs to send a ping to wstunnel server. 
   # Restart wstunnel if ping fails. set 0 to disable. 
   # Set a lower value if you switch network often
+  # ****Redundant**** patched in wstunnel 
   healthcheck_wst_interval: 30 
   
   # Number of tries to fetch public IP, set 0 to disable
@@ -29,15 +33,11 @@ wstunnel:
 
   # Required
   server: wss://www.example.com:443
-  localToRemote: 0.0.0.0:51820:127.0.0.1:51820
-  udp: true
-  udpTimeoutSec: -1
+  local-to-Remote: udp://0.0.0.0:51820:127.0.0.1:51820
   
   # optional
-  #upgradeCredentials: user:pass 
-  #upgradePathPrefix: wstunnel
-  #hostHeader: wss.server.example.com
-  verbose: true
+  # http-upgrade-credentials: user:pass
+  # tls-sni-override: wss.server.example.com
 
 wireguard:
   # For AllowedIPs in windows (app os==windows):
