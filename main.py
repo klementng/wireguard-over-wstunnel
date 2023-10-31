@@ -54,8 +54,7 @@ class WStunnel:
                 self.exec_path = "./wstunnel"
 
             else:
-                logger.critical(f"[wstunnel] Unknown/Unsupported OS: '{
-                                SYSTEM_OS}', please manually set 'wstunnel_path' key under 'app' section")
+                logger.critical(f"[wstunnel] Unknown/Unsupported OS: '{SYSTEM_OS}', please manually set 'wstunnel_path' key under 'app' section")
                 sys.exit(1)
 
         self.args = gconfig['wstunnel']
