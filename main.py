@@ -66,12 +66,12 @@ class WStunnel:
         logger.info(
             f"[wstunnel] Setting server to: {self.server}")
 
-        proto, host = self.server.split("://")
+        endpoint_proto, host = self.server.split("://")
 
         if len(host.split(':')) == 2:
             host, endpoint_port = host.split(':')
         else:
-            endpoint_port = 443 if proto == 'wss://' else 80
+            endpoint_port = 443 if endpoint_proto == 'wss://' else 80
 
         self.host = host
         self.endpoint_port = endpoint_port
@@ -90,12 +90,17 @@ class WStunnel:
             self.args.get('L')
         )
 
+        print(local_server)
+
         if local_server == None:
             logger.fatal(
                 "[wstunnel] Local listening server is not set, expected either ('local-to-remote', 'L')")
             sys.exit(1)
-
-        self.proto, local_server = local_server.split("://")
+ 
+        # TODO: add proper regex
+        print(local_server)
+        local_server , _ = local_server.split("?")
+        local_proto, local_server = local_server.split("://")
         local_server = local_server.split(":")
 
         if len(local_server) == 1 or len(local_server) == 3:
@@ -161,10 +166,7 @@ class WStunnel:
         wst_args.append(wst_host)
         logger.debug(wst_args)
 
-        print(" ".join(wst_args))
-
-        self.process = subprocess.Popen(
-            wst_args, stdout=subprocess.PIPE, env={"RUST_LOG": "debug"})
+        self.process = subprocess.Popen(wst_args)#, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 
         time.sleep(0.1)
         if self.process.poll() == None:
@@ -285,7 +287,7 @@ class Wireguard:
             f"[wireguard] Changing endpoint to {listen_ip}: {wst.listen_port}")
         wg_config.del_attr(peer_id, "Endpoint")
         wg_config.add_attr(peer_id, "Endpoint",
-                           f"{listen_ip}: {wst.listen_port}")
+                           f"{listen_ip}:{wst.listen_port}")
 
         wg_config.write_file(self.tmp_conf)
 
@@ -532,15 +534,16 @@ if __name__ == '__main__':
         old_ip = get_public_ip(
             1) if config['app']['healthcheck_ip_tries'] != 0 else None
 
-        if config['app']['start_wireguard'] == True:
-
-            if wireguard.start() == True:
-                active_processes.append(wireguard)
-
         if config['app']['start_wstunnel'] == True:
 
             if wstunnel.start() == True:
                 active_processes.append(wstunnel)
+                time.sleep(0.5)
+
+        if config['app']['start_wireguard'] == True:
+
+            if wireguard.start() == True:
+                active_processes.append(wireguard)
 
         if config['app']['export_wireguard_conf'] == True:
             wireguard.save()
