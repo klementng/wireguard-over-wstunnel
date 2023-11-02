@@ -1,44 +1,41 @@
 app:
-  # For windows systems
+  
+  ##### Default path if not specified #####
+  
+  # For windows
   # wireguard_path: C:\Program Files\WireGuard\wireguard.exe
   # wstunnel_path: .\wstunnel.exe # download from https://github.com/erebe/wstunnel/releases
   
-  # For linux systems
+  # For linux
   #wireguard_path: wg-quick #find in $PATH
   #wstunnel_path: ./wstunnel # download from https://github.com/erebe/wstunnel/releases
   
-  start_wireguard: true
-  start_wstunnel: false
-  
-  # Miscellaneous settings
+  ##### Other settings #####
 
-  # Automatic exit timer
-  exit_timer: 3
+  start_wireguard: true
+  start_wstunnel: true
   
-  # Interval in secs to send a ping to wstunnel server. 
-  # Restart wstunnel if ping fails. set 0 to disable. 
-  # Set a lower value if you switch network often
-  # ****Redundant**** patched in wstunnel 
-  healthcheck_wst_interval: 30 
-  
+  # Interval in secs to send a ping to wstunnel server. Restarts wstunnel if ping fails. set 0 to disable. 
+  healthcheck_ping_interval: 0   # **Redundant** patched in wstunnel >v6.0
+
   # Number of tries to fetch public IP, set 0 to disable
-  healthcheck_ip_tries: 3
+  healthcheck_ip_tries: 3 
 
 
   export_wireguard_conf: false # export temp conf to current directory
-    
+
 
 wstunnel:
   # see https://github.com/erebe/wstunnel
 
   # Required
-  server: wss://www.example.com:443
-  local-to-Remote: udp://0.0.0.0:51820:127.0.0.1:51820?timeout_sec=0
-  
-  # optional
-  http-upgrade-path-prefix: 
-  http-upgrade-credentials: user:pass
-  tls-sni-override: wss.server.example.com
+  - server: wss://www.example.com:443
+  - local-to-Remote: udp://0.0.0.0:51820:127.0.0.1:51820?timeout_sec=0 # if multiple local-to-remote is set, the first one will be used to set wireguard endpoint server
+
+  # Optional
+  #- http-upgrade-path-prefix: wstunnel
+  #- http-upgrade-credentials: user:pass
+  #- tls-sni-override: wss.server.example.com
 
 wireguard:
   # For AllowedIPs in windows (app os==windows):
