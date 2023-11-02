@@ -38,7 +38,7 @@ logger = logging.getLogger("app")
 class WStunnel:
 
     def __init__(self, path, wst_config) -> None:
-        self.args: list = wst_config
+        self.args = wst_config
         self.process = None
 
         self.log = logging.getLogger("wstunnel")
@@ -133,8 +133,7 @@ class WStunnel:
                 dns_json.update({host: ip})
 
             except:
-                self.log.warning(f"DNS Lookup: Failed! Looking up cached entries for '{
-                                 host}' in dns.json")
+                self.log.warning(f"DNS Lookup: Failed! Looking up cached entries for '{host}' in dns.json")
                 ip = dns_json.get(host)
 
                 if ip == None:
