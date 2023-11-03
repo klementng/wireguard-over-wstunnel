@@ -200,6 +200,8 @@ class Wireguard:
 
     def __init__(self, path, config, wst: WStunnel) -> None:
         self.log = logging.getLogger("wireguard")
+        self.wst = wst
+        self.started = False
 
         # Parse and validate executable path
         if path == None:
@@ -240,13 +242,13 @@ class Wireguard:
             self.tmp_dir,
             f'wg-wst-{str_hash[0:8]}.conf'
         )
-
+        self.iface_name = os.path.basename(self.tmp_conf).replace('.conf', '')
         self.log.debug(f"Creating temporary conf at {self.tmp_conf}")
 
         with open(self.tmp_conf, 'w') as f:
             f.write(wg_str)
 
-        # Replace end point ip
+        # Replace endpoint ip with wg_config
         wg_config = wgconfig.WGConfig(self.tmp_conf)
         wg_config.read_file()
 
@@ -258,8 +260,7 @@ class Wireguard:
         for ips in wg_config.peers[peer_id]["AllowedIPs"]:
 
             if ips == "::/0" and SYSTEM_OS == 'windows':
-                self.log.info(
-                    "OS == windows, skipping AllowedIPs '::/0'")
+                self.log.info("OS == windows, skipping AllowedIPs '::/0'")
                 continue
 
             try:
@@ -274,8 +275,7 @@ class Wireguard:
                 allowed_ips.append(ips)
 
         if SYSTEM_OS == 'windows':
-            self.log.info(
-                "OS == windows, adding ['::/1','8000::/1'] to AllowedIPs")
+            self.log.info("OS == windows, adding ['::/1','8000::/1'] to AllowedIPs")
             allowed_ips.extend(["::/1", "8000::/1"])
 
         self.log.debug(allowed_ips)
@@ -293,23 +293,20 @@ class Wireguard:
         wg_config.write_file(self.tmp_conf)
 
         self.wg_config = wg_config
-        self.wst = wst
-        self.started = False
-        self.interface = os.path.basename(self.tmp_conf).replace('.conf', '')
 
     def remove_orphan_iface(self):
         for i in psutil.net_if_addrs().keys():
-            self.log.debug(f"{i} == {self.interface}: {i == self.interface}")
+            self.log.debug(f"{i} == {self.iface_name}: {i == self.iface_name}")
 
-            if i == self.interface:
+            if i == self.iface_name:
                 self.log.warning(
-                    f"The interface '{self.interface}' exist this may be due to improperly stopped program or another instance is running. Attempting automatic removal")
+                    f"The interface '{self.iface_name}' exist this may be due to improperly stopped program or another instance is running. Attempting automatic removal")
                 self.stop()
 
             elif i.startswith('wg-wst'):
                 if SYSTEM_OS == 'windows':
                     self.log.warning(
-                        f"Found orphan '{self.interface}' interface attempting automatic removal...")
+                        f"Found orphan '{self.iface_name}' interface attempting automatic removal...")
                     subprocess.run([
                         self.exec_path, '/uninstalltunnelservice', i])
                 else:
@@ -319,18 +316,7 @@ class Wireguard:
         time.sleep(1)
 
     def start(self):
-
-        # if not ("L" in self.wst.args or "local-to-remote" in self.wst.args):
-        #     self.log.fatal(
-        #         "Unable to start wireguard. wstunnel must be started in 'L' or 'local-to-remote' mode")
-        #     sys.exit(1)
-
-        # # if not ('udp' in self.wst.args or 'U' in self.wst.args):
-        # #     logger.fatal(
-        # #         "Unable to start wireguard. wstunnel must be started in 'udp' or 'U' mode")
-        # #     sys.exit(1)
-
-        self.log.info(f"Starting {self.interface}...")
+        self.log.info(f"Starting {self.iface_name}...")
 
         self.remove_orphan_iface()
 
@@ -356,11 +342,11 @@ class Wireguard:
         return self.started
 
     def stop(self):
-        self.log.info(f"Stopping {self.interface}...")
+        self.log.info(f"Stopping {self.iface_name}...")
 
         if SYSTEM_OS == 'windows':
             action = "/uninstalltunnelservice"
-            path = self.interface
+            path = self.iface_name
         else:
             action = 'down'
             path = self.tmp_conf
@@ -373,12 +359,12 @@ class Wireguard:
 
         if status.returncode == 0:
             self.log.info("Stopped!")
+            self.started = False
         else:
             self.log.critical(
                 f"Unable to stop. Program return status code of: {status.returncode}")
-
-        self.started = True if status == 0 else False
-        return self.started
+        
+        return not self.started
 
     def cleanup(self):
         if self.started:
@@ -388,7 +374,7 @@ class Wireguard:
             shutil.rmtree(self.tmp_dir)
 
     def save(self):
-        shutil.copyfile(self.tmp_conf, self.interface + ".conf")
+        shutil.copyfile(self.tmp_conf, self.iface_name + ".conf")
 
     def __del__(self):
         if os.path.exists(self.tmp_dir):
@@ -464,37 +450,28 @@ def healthcheck_ip(old_ip, sleep=5, max_it=5):
     return False
 
 
-def healthcheck_ping(wstunnel: WStunnel, interval=60, restart_wstunnel=True):
+def healthcheck_ping(wstunnel: WStunnel, restart_wstunnel=True):
+    servers = [wstunnel.endpoint_ip, '1.1.1.1', '8.8.8.8']
+    flag = '-n' if SYSTEM_OS == 'windows' else '-c'
 
-    while True:
+    for s in servers:
+        res = subprocess.call(
+            ["ping", flag, '1', s], stdout=subprocess.PIPE)
 
-        if interval != 0:
-            time.sleep(interval)
+        if res == 0:
+            logger.debug(
+                f"Health Check Ping: Success! Server: {s}")
+            break
 
-            servers = [wstunnel.endpoint_ip, '1.1.1.1', '8.8.8.8']
-            flag = '-n' if SYSTEM_OS == 'windows' else '-c'
+    if res != 0:
+        logger.warning(
+            f"Health Check Ping: Failed! Unable to ping {servers}")
 
-            for s in servers:
-                res = subprocess.call(
-                    ["ping", flag, '1', s], stdout=subprocess.PIPE)
+        if restart_wstunnel:
+            logger.warning(
+                f"Health Check Ping: Restarting wstunnel...")
 
-                if res == 0:
-                    logger.debug(
-                        f"Health Check Ping: Success! Server: {s}")
-                    break
-
-            if res != 0:
-                logger.warning(
-                    f"Health Check Ping: Failed! Unable to ping {servers}")
-
-                if restart_wstunnel:
-                    logger.warning(
-                        f"Health Check Ping: Restarting wstunnel...")
-
-                    wstunnel.restart()
-        else:
-            time.sleep(9999)
-
+            wstunnel.restart()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Wireguard over wstunnel")
@@ -551,7 +528,14 @@ if __name__ == '__main__':
         logger.info(f"Press CTRL + C to exit")
 
         healthcheck_ip(old_ip, max_it=config['app']['healthcheck_ip_tries'])
-        healthcheck_ping(wstunnel, config['app']['healthcheck_ping_interval'])
+
+        while True:
+            if config['app']['healthcheck_ping_interval'] > 0:
+                healthcheck_ping(wstunnel, restart_wstunnel=True)
+                time.sleep(config['app']['healthcheck_ping_interval'])
+            else:
+                time.sleep(9999)
+        
 
     except (KeyboardInterrupt, SystemExit):
         pass
