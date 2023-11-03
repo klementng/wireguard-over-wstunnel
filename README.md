@@ -18,58 +18,37 @@ This script require the following software to be installed / downloaded:
   - [wstunnel](https://github.com/erebe/wstunnel/releases)
   - [wireguard](https://www.wireguard.com/install/)
 
-### Installation
+### Installation 
 
-_Installing required packages_
+_Using source code_
 
-1. Clone the repo
-   ```sh
-   git clone https://github.com/klementng/wireguard-over-wstunnel.git
-   ```
-2. Change directory
-   ```sh
-   cd wireguard-over-wstunnel/
-   ```
+1. Download latest [release](https://github.com/klementng/wireguard-over-wstunnel/releases/) source code
+2. Extract zip file
 3. Install required packages
    ```sh
    pip install -r requirements.txt 
    ```
-4. Download [wstunnel](https://github.com/erebe/wstunnel/releases/)
+4. Edit the [config.yml](./config.yml)
+5. Start the program
    ```sh
-   wget https://github.com/erebe/wstunnel/releases/download/v5.0/wstunnel-linux-x64
-   ```
-5. Change permission on file
-   ```sh
-   chmod +x wstunnel-linux-x64
+   python main.py
    ```
 
  _Using pyinstaller precomplied binaries_
-
-1. Download latest [release](https://github.com/klementng/wireguard-over-wstunnel/releases/)
-2. Download [wstunnel](https://github.com/erebe/wstunnel/releases)
-3. Change permissions (for linux systems)
+1. Download latest [release](https://github.com/klementng/wireguard-over-wstunnel/releases/) binary
+2. Change permissions (for linux systems)
     ```sh
     chmod +x ./main 
     ```
+3. Edit the [config.yml](./config.yml)
 4. Start the program (double click on windows)
     ```sh
     ./main 
     ```
-
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
 ## Usage
-
-Setup the yaml config and start the server
-
-1. Edit the [config.yml](./config.yml)
-2. Start the program
-
-```sh
-python main.py
-```
-
 Additional Options:
 
 ```sh
