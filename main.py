@@ -49,10 +49,12 @@ class WStunnel:
             self.log.warning(
                 "'wstunnel_path' key is not set, using default path")
 
-        path = r".\wstunnel.exe" if path == None and SYSTEM_OS == 'windows' else "./wstunnel"
+            path = r".\wstunnel.exe" if SYSTEM_OS == 'windows' else path
+            path = "./wstunnel" if SYSTEM_OS == 'linux' else path
+
         self.log.info(f"Setting 'wstunnel_path' to '{path}'")
 
-        if not os.path.exists(path):
+        if path == None or not os.path.exists(path):
             self.log.fatal(f"Executable at '{path}' does not exist")
             sys.exit(1)
 
@@ -78,7 +80,7 @@ class WStunnel:
         if len(host.split(':')) == 2:
             host, endpoint_port = host.split(':')
         else:
-            endpoint_port = 443 if endpoint_proto == 'wss://' else 80
+            endpoint_port = 443 if endpoint_proto == 'wss' else 80
 
         self.log.info(f"Using endpoint server at: {self.server}")
 
@@ -207,8 +209,8 @@ class Wireguard:
         if path == None:
             self.log.warning(
                 "'wireguard_path' key is not set, using default paths")
-            path = r"C:\Program Files\WireGuard\wireguard.exe" if SYSTEM_OS == 'windows' else None
-            path = "/usr/bin/wg-quick" if SYSTEM_OS == 'linux' else None
+            path = r"C:\Program Files\WireGuard\wireguard.exe" if SYSTEM_OS == 'windows' else path
+            path = "/usr/bin/wg-quick" if SYSTEM_OS == 'linux' else path
 
         self.log.info(f"Setting 'wireguard_path' to '{path}'")
 
@@ -286,10 +288,9 @@ class Wireguard:
 
         listen_ip = '127.0.0.1' if wst.listen_ip == '0.0.0.0' else wst.listen_ip
 
-        self.log.info(f"Changing endpoint to {listen_ip}: {wst.listen_port}")
+        self.log.info(f"Changing endpoint to {listen_ip}:{wst.listen_port}")
         wg_config.del_attr(peer_id, "Endpoint")
-        wg_config.add_attr(peer_id, "Endpoint", f"{listen_ip}: {wst.listen_port}")
-
+        wg_config.add_attr(peer_id, "Endpoint", f"{listen_ip}:{wst.listen_port}")
         wg_config.write_file(self.tmp_conf)
 
         self.wg_config = wg_config
