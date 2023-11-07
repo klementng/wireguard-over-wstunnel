@@ -30,7 +30,7 @@ wstunnel:
 
   # Required
   - server: wss://www.example.com:443
-  - local-to-Remote: udp://0.0.0.0:51820:127.0.0.1:51820?timeout_sec=0 # if multiple local-to-remote is set, the first one will be used to set wireguard endpoint server
+  - local-to-remote: udp://0.0.0.0:51820:127.0.0.1:51820?timeout_sec=0 # if multiple local-to-remote is set, the first one will be used to set wireguard endpoint server
 
   # Optional
   #- http-upgrade-path-prefix: wstunnel
