@@ -1,4 +1,4 @@
-psutil==5.9.6
+psutil==5.9.7
 PyYAML==6.0.1
 requests==2.31.0
 wgconfig==1.0.0
