@@ -71,16 +71,16 @@ class WStunnel:
                 f"Please configure the 'server' key wstunnel config")
             sys.exit(1)
 
-        if "wss://" not in self.server and "ws://" not in self.server:
-            self.log.fatal(f"Expected either 'wss: //' or 'ws: //' protocol")
-            sys.exit(1)
+        # if "wss://" not in self.server and "ws://" not in self.server:
+        #     self.log.fatal(f"Expected either 'wss: //' or 'ws: //' protocol")
+        #     sys.exit(1)
 
         endpoint_proto, host = self.server.split("://")
 
         if len(host.split(':')) == 2:
             host, endpoint_port = host.split(':')
         else:
-            endpoint_port = 443 if endpoint_proto == 'wss' else 80
+            endpoint_port = 443 if endpoint_proto == 'wss' or endpoint_proto == 'https' else 80
 
         self.log.info(f"Using endpoint server at: {self.server}")
 
