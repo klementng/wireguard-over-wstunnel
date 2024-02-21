@@ -23,15 +23,16 @@ import requests
 import wgconfig
 import yaml
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(levelname)s - %(name)s - %(message)s'
-)
-
 SYSTEM_OS = platform.system().lower()
 
 if SYSTEM_OS == 'windows':
     import win32api
+    import win32con
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(levelname)s - %(name)s - %(message)s'
+)
 
 active_processes = []
 logger = logging.getLogger("app")
@@ -590,8 +591,18 @@ def cleanup():
         except:
             pass
 
+def exit_handler(event):
+    if event in [
+        win32con.CTRL_C_EVENT, 
+        win32con.CTRL_LOGOFF_EVENT,
+        win32con.CTRL_BREAK_EVENT, 
+        win32con.CTRL_SHUTDOWN_EVENT,
+        win32con.CTRL_CLOSE_EVENT
+    ]:
+        cleanup()
+
 if __name__ == '__main__':
-    win32api.SetConsoleCtrlHandler(cleanup, 1)
+    win32api.SetConsoleCtrlHandler(exit_handler, 1)
     main()
 
 
