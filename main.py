@@ -179,7 +179,7 @@ class WStunnel:
 
         self.process = subprocess.Popen(wst_args)
 
-        time.sleep(0.5)
+        time.sleep(0.25)
         if self.process.poll() == None:
             self.log.info("Started wstunnel!")
             return True
@@ -192,7 +192,7 @@ class WStunnel:
             self.log.info("Stopping...")
             self.process.terminate()
 
-            time.sleep(0.25)
+            time.sleep(0.1)
             if self.process.poll() == None:
                 self.process.kill()
 
@@ -368,10 +368,11 @@ class Wireguard:
 
         if status.returncode == 0:
             self.log.info("Started wireguard!")
+            return True
         else:
             self.log.critical(f"Unable to start wireguard. Program return status code of: {
                               status.returncode}")
-            sys.exit(status.returncode)
+            return False
 
     def stop(self):
         self.log.info(f"Stopping {self.iface_name}...")
@@ -542,12 +543,15 @@ def main():
 
             if wstunnel.start() == True:
                 active_processes.append(wstunnel)
-                time.sleep(0.5)
+            else:
+                sys.exit(1)
 
         if config['app']['start_wireguard'] == True:
 
             if wireguard.start() == True:
                 active_processes.append(wireguard)
+            else:
+                sys.exit(1)
 
         if config['app']['export_wireguard_conf'] == True:
             wireguard.save()
