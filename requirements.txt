@@ -2,4 +2,4 @@ psutil==5.9.8
 PyYAML==6.0.1
 requests==2.31.0
 wgconfig==1.0.1
-win32api; platform_system == "Windows"
+pywin32; platform_system == "Windows"
