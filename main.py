@@ -192,8 +192,9 @@ class WStunnel:
             self.log.info("Stopping...")
             self.process.terminate()
 
-            while self.process.poll() == None:
-                time.sleep(0.1)
+            time.sleep(0.25)
+            if self.process.poll() == None:
+                self.process.kill()
 
             self.log.info("Stopped!")
 
@@ -566,30 +567,27 @@ def main():
         pass
 
     except:
-        logger.critical("Caught an exception. exiting...", exc_info=True)
+        logger.critical("Caught an exception. exiting...", exc_info=True)        
+        logger.critical(f"Exiting in 5s. Press CTRL + C to stop, spam it to exit now")
+        try:
+            time.sleep(5)
+        except:
+            try:
+                input("***** Press Enter or CTRL + C to Exit *****")
+            except:
+                pass
+        
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
 
 @atexit.register
 def cleanup():
-    s1 = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
-
     logger.info("Cleaning Up...")
     for p in active_processes:
         p.cleanup()
 
     logger.info("Cleanup Complete!")
-    logger.info(
-        f"Exiting in {5}s. Press CTRL + C to stop, spam it to exit now")
-
-    try:
-        signal.signal(signal.SIGINT, s1)
-        time.sleep(5)
-    except:
-        try:
-            input("***** Press Enter or CTRL + C to Exit *****")
-        except:
-            pass
 
 def exit_handler(event):
     if event in [
