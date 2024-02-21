@@ -1,7 +1,5 @@
 #!/usr/bin/python3
-
 import argparse
-import atexit
 import copy
 import ctypes
 import hashlib
@@ -20,14 +18,11 @@ import time
 
 import psutil
 import requests
+import safe_exit
 import wgconfig
 import yaml
 
 SYSTEM_OS = platform.system().lower()
-
-if SYSTEM_OS == "windows":
-    import win32api
-    import win32con
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(name)s - %(message)s")
 
@@ -46,16 +41,16 @@ class WStunnel:
 
         # Parse and validate executable path
         self.exec_path = self._init_path(config)
-        self.log.info(f"Setting 'wstunnel_path' to '{self.exec_path}'")
+        self.log.info("Setting 'wstunnel_path' to '%s'", self.exec_path)
 
         # Parse and validate endpoint server
         self.server, self.host, self.endpoint_port, self.endpoint_ip = (
             self._init_server()
         )
-        self.log.info(f"Using endpoint server at: {self.server}")
+        self.log.info("Using endpoint server at: %s", self.server)
 
         self.listen_ip, self.listen_port = self._init_local()
-        self.log.info(f"listening on: {self.listen_ip}:{self.listen_port}")
+        self.log.info("Listening on: %s:%s", self.listen_ip, self.listen_port)
 
     def _init_path(self, config):
         path = config["app"].get("wstunnel_path")
@@ -66,7 +61,7 @@ class WStunnel:
             path = "./wstunnel" if SYSTEM_OS == "linux" else path
 
         if path == None or not os.path.exists(path):
-            self.log.fatal(f"Executable at '{path}' does not exist")
+            self.log.critical("Executable at '%s' does not exist", path)
             sys.exit(1)
 
         return path
@@ -79,7 +74,7 @@ class WStunnel:
                 server = self.args.pop(i)["server"]
 
         if server == None or "www.example.com" in server:
-            self.log.critical(f"Please configure the 'server' key wstunnel config")
+            self.log.critical("Please configure the 'server' key wstunnel config")
             sys.exit(1)
 
         endpoint_proto, host = server.split("://")
@@ -91,8 +86,6 @@ class WStunnel:
                 443 if endpoint_proto == "wss" or endpoint_proto == "https" else 80
             )
 
-        endpoint_proto = endpoint_proto
-        endpoint_port = endpoint_port
         endpoint_ip = self._lookup_host(host)
 
         return server, host, endpoint_port, endpoint_ip
@@ -100,14 +93,14 @@ class WStunnel:
     def _init_local(self):
         # Parse local listening ip/port
         local_to_remote = None
-        for i, a in enumerate(self.args):
+        for a in self.args:
             if list(a.keys())[0] in ["local-to-remote", "L"]:
                 local_to_remote = a.get("local-to-remote", a.get("L"))
                 break
 
         if local_to_remote == None:
-            self.log.fatal(
-                f"Local listening server is not set, expected either ('local-to-remote', 'L')"
+            self.log.critical(
+                "Local listening server is not set, expected either ('local-to-remote', 'L')"
             )
             sys.exit(1)
 
@@ -123,13 +116,13 @@ class WStunnel:
             return local_to_remote[0], local_to_remote[1]
 
     def _lookup_host(self, host: str):
-        self.log.info(f"Looking up DNS / Validating IP for: '{host}'")
+        self.log.info("Looking up DNS / Validating IP for: '%s'", host)
 
         if not os.path.exists("dns.json"):
-            with open("dns.json", "w") as f:
+            with open("dns.json", "w", encoding="utf-8") as f:
                 f.write(r"{}")
 
-        with open("dns.json", "r") as f:
+        with open("dns.json", "r", encoding="utf-8") as f:
             txt = f.read()
 
         if txt == "":
@@ -141,19 +134,20 @@ class WStunnel:
             ip = socket.gethostbyname(host)
             dns_json.update({host: ip})
 
-        except:
+        except socket.gaierror:
             self.log.warning(
-                f"DNS Lookup: Failed! Looking up cached entries for '{host}' in dns.json"
+                "DNS Lookup: Failed! Looking up cached entries for '%s' in dns.json",
+                host,
             )
             ip = dns_json.get(host)
 
             if ip == None:
                 self.log.critical(
-                    f"DNS Lookup: Unable to automatically determine ip for '{host}'"
+                    "DNS Lookup: Unable to automatically determine ip for '%s'", host
                 )
                 sys.exit(1)
 
-        with open("dns.json", "w") as f:
+        with open("dns.json", "w", encoding="utf-8") as f:
             json.dump(dns_json, f)
         return ip
 
@@ -218,7 +212,7 @@ class Wireguard:
         self.wst = wst
         # Parse and validate executable path
         self.exec_path = self._init_path(config)
-        self.log.info(f"Setting 'wireguard_path' to '{self.exec_path}'")
+        self.log.info("Setting 'wireguard_path' to '%s'", self.exec_path)
 
         # load config
         self.log.info("Parsing config...")
@@ -253,7 +247,7 @@ class Wireguard:
             if config["wireguard"].get("str") != None:
                 self.log.warning("'path' key is set. The 'str' key is ignored")
 
-            with open(config["wireguard"]["path"]) as f:
+            with open(config["wireguard"]["path"], encoding="utf-8") as f:
                 self.log.info("Using conf file at: %s", config["wireguard"]["path"])
                 wg_str = f.read()
 
@@ -268,7 +262,7 @@ class Wireguard:
         iface_name = f"wg-wst-{str_hash[0:8]}"
 
         self.log.debug(f"Creating temporary conf at {tmp_conf_path}")
-        with open(tmp_conf_path, "w") as f:
+        with open(tmp_conf_path, "w", encoding="utf-8") as f:
             f.write(wg_str)
 
         return tmp_conf_path, iface_name
@@ -278,11 +272,11 @@ class Wireguard:
         wg_config.read_file()
 
         allowed_ips = []
-        peer_id = list(wg_config.peers.keys())[0]
+        peer_id = list(wg_config.peers.keys())[0]  # type: ignore
 
         self.log.debug(f"Allowing outgoing connection to {wst.endpoint_ip}")
 
-        for ips in wg_config.peers[peer_id]["AllowedIPs"]:
+        for ips in wg_config.peers[peer_id]["AllowedIPs"]:  # type: ignore
 
             if ips == "::/0" and SYSTEM_OS == "windows":
                 self.log.info("OS == windows, skipping AllowedIPs '::/0'")
@@ -331,7 +325,9 @@ class Wireguard:
                 )
 
                 if SYSTEM_OS == "windows":
-                    psc = subprocess.run([self.exec_path, "/uninstalltunnelservice", i])
+                    psc = subprocess.run(
+                        [self.exec_path, "/uninstalltunnelservice", i], check=False
+                    )
 
                     if psc.returncode == 0:
                         self.log.info(f"Successfully stopped '{i}'")
@@ -380,7 +376,7 @@ class Wireguard:
             action = "down"
             path = self.tmp_conf
 
-        status = subprocess.run([self.exec_path, action, path])
+        status = subprocess.run([self.exec_path, action, path], check=False)
 
         if status.returncode == 0:
             self.log.info("Stopped!")
@@ -407,8 +403,8 @@ def elevate_user():
     logger.info("Elevating to superuser / admin")
 
     if SYSTEM_OS == "windows":
-        if not ctypes.windll.shell32.IsUserAnAdmin():
-            ctypes.windll.shell32.ShellExecuteW(
+        if not ctypes.windll.shell32.IsUserAnAdmin():  # type: ignore
+            ctypes.windll.shell32.ShellExecuteW(  # type: ignore
                 None, "runas", sys.executable, " ".join(sys.argv), None, 1
             )
             sys.exit(0)
@@ -430,7 +426,7 @@ def get_public_ip(timeout=5):
 
         return res.text
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         logger.debug(f"Unable to fetch Public IP")
         logger.debug(e)
         return None
@@ -511,9 +507,9 @@ def main():
 
     logger.setLevel(args.log_level)
 
-    with open(args.config) as f:
+    with open(args.config, encoding="utf-8") as f:
         logger.info("Loading app config...")
-        config = yaml.full_load(f)
+        config = yaml.safe_load(f)
 
     logger.info(f"Detected OS: {SYSTEM_OS}")
 
@@ -565,22 +561,22 @@ def main():
     except (KeyboardInterrupt, SystemExit):
         pass
 
-    except:
+    except Exception:  # pylint: disable=broad-exception-caught
         logger.critical("Caught an exception. exiting...", exc_info=True)
         logger.critical(f"Exiting in 5s. Press CTRL + C to stop, spam it to exit now")
         try:
             time.sleep(5)
-        except:
+        except KeyboardInterrupt:
             try:
                 input("***** Press Enter or CTRL + C to Exit *****")
-            except:
+            except KeyboardInterrupt:
                 pass
 
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
 
-@atexit.register
+@safe_exit.register
 def cleanup():
     logger.info("Cleaning Up...")
     for p in active_processes:
@@ -589,17 +585,5 @@ def cleanup():
     logger.info("Cleanup Complete!")
 
 
-def exit_handler(event):
-    if event in [
-        win32con.CTRL_C_EVENT,
-        win32con.CTRL_LOGOFF_EVENT,
-        win32con.CTRL_BREAK_EVENT,
-        win32con.CTRL_SHUTDOWN_EVENT,
-        win32con.CTRL_CLOSE_EVENT,
-    ]:
-        cleanup()
-
-
 if __name__ == "__main__":
-    win32api.SetConsoleCtrlHandler(exit_handler, 1)
     main()
