@@ -129,33 +129,33 @@ class WStunnel:
             with open("dns.json", "w") as f:
                 f.write(r"{}")
 
-        with open("dns.json", "r+") as f:
+        with open("dns.json", "r") as f:
             txt = f.read()
 
-            if txt == "":
-                dns_json = {}
-            else:
-                dns_json = json.loads(txt)
+        if txt == "":
+            dns_json = {}
+        else:
+            dns_json = json.loads(txt)
 
-            try:
-                ip = socket.gethostbyname(host)
-                dns_json.update({host: ip})
+        try:
+            ip = socket.gethostbyname(host)
+            dns_json.update({host: ip})
 
-            except:
-                self.log.warning(
-                    f"DNS Lookup: Failed! Looking up cached entries for '{host}' in dns.json"
+        except:
+            self.log.warning(
+                f"DNS Lookup: Failed! Looking up cached entries for '{host}' in dns.json"
+            )
+            ip = dns_json.get(host)
+
+            if ip == None:
+                self.log.critical(
+                    f"DNS Lookup: Unable to automatically determine ip for '{host}'"
                 )
-                ip = dns_json.get(host)
+                sys.exit(1)
 
-                if ip == None:
-                    self.log.critical(
-                        f"DNS Lookup: Unable to automatically determine ip for '{host}'"
-                    )
-                    sys.exit(1)
-
-            f.seek(0)
+        with open("dns.json", "w") as f:
             json.dump(dns_json, f)
-            return ip
+        return ip
 
     def start(self):
         self.log.info("Starting wstunnel...")
