@@ -2,8 +2,8 @@
 
 import argparse
 import atexit
-import ctypes
 import copy
+import ctypes
 import hashlib
 import ipaddress
 import json
@@ -32,8 +32,6 @@ logging.basicConfig(
 SYSTEM_OS = platform.system().lower()
 
 if SYSTEM_OS == 'windows':
-    subprocess.run(["pip", "install", "pywin32"])
-    time.sleep(1)
     import win32api
 
 active_processes = []
