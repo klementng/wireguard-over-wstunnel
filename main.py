@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 
 import argparse
 import atexit
@@ -20,7 +20,6 @@ import time
 
 import psutil
 import requests
-import safe_exit
 import wgconfig
 import yaml
 
