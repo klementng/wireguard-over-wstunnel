@@ -30,6 +30,12 @@ logging.basicConfig(
 )
 
 SYSTEM_OS = platform.system().lower()
+
+if SYSTEM_OS == 'windows':
+    subprocess.run(["pip", "install", "pywin32"])
+    time.sleep(1)
+    import win32api
+
 active_processes = []
 logger = logging.getLogger("app")
 
@@ -44,7 +50,6 @@ class WStunnel:
         self.log.info("Parsing config...")
 
         # Parse and validate executable path
-
         self.exec_path = self._init_path(config)
         self.log.info(f"Setting 'wstunnel_path' to '{self.exec_path}'")
 
@@ -344,6 +349,8 @@ class Wireguard:
                         i},  please manually stop it before starting the program")
                     sys.exit(1)
 
+        time.sleep(0.5)
+
     def start(self):
         self.log.info(f"Starting {self.iface_name}...")
 
@@ -564,11 +571,7 @@ def main():
         logger.critical("Caught an exception. exiting...", exc_info=True)
 
 
-if __name__ == '__main__':
-    main()
-
-
-@safe_exit.register
+@atexit.register
 def cleanup():
     s1 = signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
@@ -589,3 +592,13 @@ def cleanup():
             input("***** Press Enter or CTRL + C to Exit *****")
         except:
             pass
+
+if __name__ == '__main__':
+    win32api.SetConsoleCtrlHandler(cleanup, 1)
+    main()
+
+
+
+
+
+
