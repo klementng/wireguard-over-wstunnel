@@ -3,7 +3,9 @@ import ctypes.wintypes
 import logging
 import os
 import platform
+import socket
 import sys
+import threading
 import time
 import requests
 import psutil
@@ -116,3 +118,14 @@ def get_assets_path(rel_path):
         base_path = os.path.abspath(".")
 
     return os.path.join(base_path, rel_path)
+
+
+def run_as_thread(target, args=(), kwargs=None, daemon=True, *a, **kw):
+    
+    def wrap():
+        t = threading.Thread(
+            target=target, args=args, kwargs=kwargs, daemon=daemon, *a, **kw
+        )
+        t.start()
+    
+    return wrap
