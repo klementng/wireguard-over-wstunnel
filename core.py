@@ -1,4 +1,3 @@
-from concurrent.futures import process
 import copy
 import hashlib
 import ipaddress
@@ -15,7 +14,7 @@ import tempfile
 import time
 import threading
 
-
+import helper
 import psutil
 import wgconfig
 
@@ -25,7 +24,7 @@ class WStunnel:
     def __init__(self, config) -> None:
         self.args = copy.copy(config["wstunnel"])
         self.process: None | subprocess.Popen = None
-        self.process_logger: None | threading.Thread = None
+        self.process_logger_thread: None | threading.Thread = None
 
         self.log = logging.getLogger("wstunnel")
         self.log.info("Parsing config...")
@@ -148,7 +147,7 @@ class WStunnel:
             output_std = self.process.stdout.readline()  # type: ignore
             if output_std != "":
                 self.log.info(output_std.decode())
-            time.sleep(0.1)
+            time.sleep(0.01)
             # # if output_err != "":
             # #     self.log.error(output_err.decode())
             # print(self.process.poll())
@@ -185,34 +184,59 @@ class WStunnel:
         wst_args.append(wst_host)
         self.log.debug(wst_args)
 
-        self.process = subprocess.Popen(
-            wst_args,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            shell=True,
-            preexec_fn=os.setsid,
-        )
+        kw = {
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE,
+            "shell": True,
+        }
 
-        time.sleep(1)
+        if platform.system() == "Windows":
+            kw.setdefault("creationflags", subprocess.CREATE_NEW_PROCESS_GROUP)
+        else:
+            kw.setdefault("preexec_fn", os.setsid)
 
+        self.process = subprocess.Popen(wst_args, **kw)
+
+        time.sleep(3)
         if self.is_running:
-            self.process_logger = threading.Thread(target=self._pipe_to_logging)
-            self.process_logger.start()
+            self.process_logger_thread = threading.Thread(
+                target=self._pipe_to_logging, daemon=True
+            )
+            self.process_logger_thread.start()
 
             self.log.info("Started wstunnel!")
             return True
         else:
-            self.log.critical("Unable to start wstunnel.")
+            self.log.critical(
+                "Unable to start wstunnel. Process return a status code of: %s",
+                self.process.returncode,
+            )
             return False
 
     def stop(self):
         if self.is_running:
             self.log.info("Stopping...")
-            os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
 
-            time.sleep(1)
+            if platform.system() == "Windows":
+                self.log.info("Stopping using CTRL_C_EVENT")
+                self.process.send_signal(signal.CTRL_C_EVENT)
+                
+                time.sleep(3)
+                if self.is_running:
+                    self.log.info("Stopping using CTRL_BREAK_EVENT")
+                    self.process.send_signal(signal.CTRL_BREAK_EVENT)
+            
+            else:
+                self.log.info("Stopping using SIGTERM")
+                self.process.terminate()
+
+            time.sleep(5)
             if self.is_running:
-                os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)  # type: ignore
+                self.log.info("Stopping using SIGKILL")
+                if platform.system() == "Windows":
+                    self.process.kill()
+                else:
+                    os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)  # type: ignore
 
             self.log.info("Stopped!")
 
