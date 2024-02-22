@@ -1,5 +1,4 @@
 import logging
-import time
 import tkinter as tk
 
 import pystray
@@ -52,7 +51,7 @@ class CoreGUI(tk.Tk):
         )
         b2.pack(in_=toolbar, side="left")
 
-        self.text = tk.Text(self, wrap="none")
+        self.text = tk.Text(self, wrap="word")
         self.text.pack(side="top", fill="both", expand=True)
         #        self.text.tag_configure("stderr", foreground="#b22222")
 
@@ -83,7 +82,7 @@ class CoreGUI(tk.Tk):
 
     def tray_quit(self, icon, item):
         self.icon.stop()
-        self.destroy()
+        self.exit()
 
     def tray_show(self, icon, item):
         self.icon.stop()

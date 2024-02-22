@@ -48,22 +48,28 @@ def main(args, stop_event: None | threading.Event = None):
         else None
     )
 
-    if wstunnel.start() is True:
-        active_processes.append(wstunnel)
-    else:
-        sys.exit(1)
+    while not helper.healthcheck(wireguard, wstunnel, restart=False, log=False):
 
-    if wireguard.start() is True:
-        active_processes.append(wireguard)
-    else:
-        sys.exit(1)
-
-    time.sleep(3)
-    for i in range(config["app"].get("healthcheck_ip_tries", 0)):
-        if helper.healthcheck_ip(old_ip):
-            break
         if isinstance(stop_event, threading.Event) and stop_event.is_set():
             break
+
+        if not wstunnel.is_running:
+            if wstunnel.start():
+                active_processes.append(wstunnel)
+
+        if not wireguard.is_running:
+            if wireguard.start():
+                active_processes.append(wireguard)
+
+        time.sleep(3)
+
+    for i in range(config["app"].get("healthcheck_ip_tries", 0)):
+        if isinstance(stop_event, threading.Event) and stop_event.is_set():
+            break
+
+        if helper.healthcheck_ip(old_ip):
+            break
+
         time.sleep(3)
 
     else:
@@ -71,18 +77,21 @@ def main(args, stop_event: None | threading.Event = None):
 
     log.info("Press CTRL + C to exit or GUI button to exit")
 
-    while True:
-        if stop_event is None:
-            time.sleep(9999)
-        else:
-            if stop_event.is_set():
-                break
-            time.sleep(1)
+    while stop_event is None or stop_event.is_set():
+
+        helper.healthcheck(wireguard, wstunnel, restart=True)
+        time.sleep(1)
+
 
 @safe_exit.register
 def cleanup():
+    global active_processes
+
     for p in active_processes:
         p.cleanup()
+
+    active_processes = []
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Wireguard over wstunnel")
@@ -129,3 +138,6 @@ if __name__ == "__main__":
 
     except Exception:
         logging.critical("Caught an exception. exiting...", exc_info=True)
+
+    finally:
+        cleanup()

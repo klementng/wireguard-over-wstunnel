@@ -46,55 +46,65 @@ def get_public_ip(timeout=3):
         return None
 
 
-def healthcheck(wireguard: core.Wireguard, wstunnel: core.WStunnel, restart=True):
+def healthcheck(
+    wireguard: core.Wireguard,
+    wstunnel: core.WStunnel,
+    restart: bool = True,
+    log: bool = True,
+):
+    logger = logging.getLogger("healthcheck:process_state")
 
-    wg = wireguard.iface_name in list(psutil.net_if_addrs().keys())
+    wg_is_healthy = wireguard.is_running
+    wst_is_healthy = wstunnel.is_running
 
-    if wstunnel.process is not None:
-        ws = wstunnel.process.poll() is None
+    if log:
+        if not wg_is_healthy:
+            logger.critical("wireguard is not started!")
 
-    if restart:
-        if not ws:
-            wstunnel.start()
-        if not wg:
-            wireguard.start()
+        if not wst_is_healthy:
+            logger.critical("wstunnel is not started!")
 
-        time.sleep(1)
+    if restart is True:
+        if not wg_is_healthy:
+            logger.info("Attempting restart of wireguard...")
 
-        wg = wireguard.iface_name in list(psutil.net_if_addrs().keys())
-        if wstunnel.process is not None:
-            ws = wstunnel.process.poll() is None
+            wireguard.restart()
 
-    return wg and ws
+        if not wst_is_healthy:
+            logger.info("Attempting restart of wstunnel...")
+            wstunnel.restart()
+
+    return wg_is_healthy and wst_is_healthy
 
 
 def healthcheck_ip(old_ip):
+    log = logging.getLogger("healthcheck:public_ip")
     new_ip = get_public_ip(1)
 
     if new_ip is None:
-        logger.warning(
-            "Health Check IP: Failed! Unable to fetch Public IP. Your traffic may not be tunneled!"
+        log.warning(
+            "Failed! Unable to fetch Public IP. Your traffic may not be tunneled!"
         )
 
         return False
 
     elif old_ip is None and new_ip is not None:
-        logger.warning(
-            "Health Check IP: Unknown Status!"
-            + f"Unable to compare old_ip: {old_ip} with new_ip: {new_ip} Your traffic may not be tunneled!" # noqa
+        log.warning(
+            "Unknown Status!"
+            + f"Unable to compare old_ip: {old_ip} with new_ip: {new_ip} Your traffic may not be tunneled!"  # noqa
         )
 
         return True
 
     elif old_ip == new_ip:
-        logger.warning(
-            f"Health Check IP: Failed! Your new_ip: {new_ip} = old_ip: {old_ip}. Your traffic may not be tunneled!"
+        log.warning(
+            f"Failed! Your new_ip: {new_ip} = old_ip: {old_ip}. Your traffic may not be tunneled!"
         )
 
         return False
 
     else:
-        logger.info(f"Health Check IP: Success! Your new Public IP is: {new_ip}")
+        log.info(f"Success! Your new Public IP is: {new_ip}")
 
         return True
 

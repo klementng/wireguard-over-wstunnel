@@ -142,20 +142,27 @@ class WStunnel:
 
     def _pipe_to_logging(self):
 
-        if self.process is not None:
-            while self.process.poll() is not None:
-                output_std = self.process.stdout.readline()  # type: ignore
-                output_err = self.process.stderr.readline()  # type: ignore
+        while self.is_running:
+            output_std = self.process.stdout.readline()  # type: ignore
+            if output_std != "":
+                self.log.info(output_std.decode())
+            time.sleep(0.1)
+            # # if output_err != "":
+            # #     self.log.error(output_err.decode())
+            # print(self.process.poll())
 
-                if output_std != "":
-                    self.log.info(output_std.decode())
-                if output_err != "":
-                    self.log.info(output_err.decode())
-
-                time.sleep(0.1)
+    @property
+    def is_running(self):
+        return (
+            isinstance(self.process, subprocess.Popen) and self.process.poll() is None
+        )
 
     def start(self):
         self.log.info("Starting wstunnel...")
+
+        if self.is_running:
+            self.log.critical("Failed to start wstunnel. It is already running...")
+            return False
 
         wst_args = [self.exec_path, "client"]
         wst_host = self.server
@@ -182,9 +189,10 @@ class WStunnel:
             stderr=subprocess.PIPE,
             shell=True,
         )
-        time.sleep(0.1)
-        if self.process.poll() is None:
 
+        time.sleep(1)
+
+        if self.is_running:
             self.process_logger = threading.Thread(target=self._pipe_to_logging)
             self.process_logger.start()
 
@@ -195,15 +203,20 @@ class WStunnel:
             return False
 
     def stop(self):
-        if self.process is not None:
+        if self.is_running:
             self.log.info("Stopping...")
-            self.process.terminate()
+            self.process.terminate()  # type: ignore
 
-            time.sleep(0.1)
-            if self.process.poll() is None:
-                self.process.kill()
+            time.sleep(1)
+            if self.is_running:
+                self.process.kill()  # type: ignore
 
             self.log.info("Stopped!")
+
+        else:
+            self.log.info("Process is already stopped")
+
+        return True
 
     def restart(self):
         self.log.info("Restarting...")
@@ -320,6 +333,10 @@ class Wireguard:
 
         return wg_config
 
+    @property
+    def is_running(self):
+        return self.iface_name in psutil.net_if_addrs()
+
     def remove_orphan_iface(self):
         for i in psutil.net_if_addrs().keys():
 
@@ -357,7 +374,7 @@ class Wireguard:
                     )
                     sys.exit(1)
 
-        time.sleep(0.5)
+        time.sleep(1)
 
     def start(self):
         self.log.info(f"Starting {self.iface_name}...")
@@ -381,23 +398,34 @@ class Wireguard:
             return False
 
     def stop(self):
-        self.log.info(f"Stopping {self.iface_name}...")
 
-        if platform.system().lower() == "windows":
-            action = "/uninstalltunnelservice"
-            path = self.iface_name
+        if self.is_running:
+            self.log.info(f"Stopping {self.iface_name}...")
+
+            if platform.system().lower() == "windows":
+                action = "/uninstalltunnelservice"
+                path = self.iface_name
+            else:
+                action = "down"
+                path = self.tmp_conf
+
+            status = subprocess.run([self.exec_path, action, path], check=False)
+
+            if status.returncode == 0:
+                self.log.info("Stopped!")
+                return True
+            else:
+                self.log.critical(
+                    f"Unable to stop. Program return status code of: {status.returncode}"
+                )
+                return False
         else:
-            action = "down"
-            path = self.tmp_conf
+            self.log.info("Tunnel cannot be found / is already stopped")
+            return True
 
-        status = subprocess.run([self.exec_path, action, path], check=False)
-
-        if status.returncode == 0:
-            self.log.info("Stopped!")
-        else:
-            self.log.critical(
-                f"Unable to stop. Program return status code of: {status.returncode}"
-            )
+    def restart(self):
+        self.stop()
+        self.start()
 
     def cleanup(self):
         self.stop()
