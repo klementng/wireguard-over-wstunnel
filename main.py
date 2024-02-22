@@ -5,6 +5,7 @@ import logging
 import platform
 import sys
 import time
+import tkinter as tk
 
 import safe_exit
 import yaml
@@ -20,7 +21,9 @@ logging.basicConfig(
 active_processes = []
 
 
-def main(args, stop_event: None | threading.Event = None):
+def main(
+    args, stop_event: None | threading.Event = None, root_win: CoreGUI | None = None
+):
     log = logging.getLogger("main")
 
     with open(args.config, encoding="utf-8") as f:
@@ -39,6 +42,8 @@ def main(args, stop_event: None | threading.Event = None):
         log.info("--clean is set, attempting removal of orphaned interface")
         wireguard.remove_orphan_iface()
         sys.exit(0)
+    
+    wireguard.remove_orphan_iface()
 
     log.info("Fetching current Public IP...")
 
@@ -48,20 +53,46 @@ def main(args, stop_event: None | threading.Event = None):
         else None
     )
 
+    attempts = 0
     while not helper.healthcheck(wireguard, wstunnel, restart=False, log=False):
+        attempts += 1
 
         if isinstance(stop_event, threading.Event) and stop_event.is_set():
             break
-
-        if not wstunnel.is_running:
-            if wstunnel.start():
-                active_processes.append(wstunnel)
+        if attempts > 3:
+            log.critical("Failed to start required processes in 3 tries. Aborting...")
+            log.critical("Ensure required ports / ip are free and available for binding.")
+            log.critical("Close any hanging wstunnel instance using task manager")
+            sys.exit(1)
 
         if not wireguard.is_running:
             if wireguard.start():
                 active_processes.append(wireguard)
 
+        if not wstunnel.is_running:
+            if wstunnel.start():
+                active_processes.append(wstunnel)
+
         time.sleep(3)
+
+    if isinstance(root_win, CoreGUI):
+        tk.Button(
+            root_win,
+            text="Run healthcheck ip",
+            command=helper.run_as_thread(helper.healthcheck_ip, args=[old_ip]),
+        ).pack(in_=root_win.toolbar, side="left")
+
+        tk.Button(
+            root_win,
+            text="Restart wstunnel",
+            command=helper.run_as_thread(wstunnel.restart),
+        ).pack(in_=root_win.toolbar, side="left")
+
+        tk.Button(
+            root_win,
+            text="Restart wireguard",
+            command=helper.run_as_thread(wireguard.restart),
+        ).pack(in_=root_win.toolbar, side="left")
 
     for i in range(config["app"].get("healthcheck_ip_tries", 0)):
         if isinstance(stop_event, threading.Event) and stop_event.is_set():
@@ -118,16 +149,16 @@ if __name__ == "__main__":
     try:
 
         if args.nogui is False:
-            gui = CoreGUI(helper.get_assets_path("assets/icon.png"))
+            root_win = CoreGUI(helper.get_assets_path("assets/icon.png"))
 
             stop_event = threading.Event()
-            thread = threading.Thread(target=main, args=[args, stop_event])
+            thread = threading.Thread(target=main, args=[args, stop_event, root_win], daemon=True)
 
-            gui.geometry("1280x720")
-            gui.title("Wireguard over wstunnel")
-            gui.after(1000, thread.start)
+            root_win.geometry("1280x720")
+            root_win.title("Wireguard over wstunnel")
+            root_win.after(1000, thread.start)
 
-            gui.mainloop()
+            root_win.mainloop()
             stop_event.set()
 
         else:

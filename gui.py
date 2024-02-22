@@ -31,8 +31,8 @@ class CoreGUI(tk.Tk):
         super().__init__(*args, **kwargs)
         self.image = Image.open(icon_path)
 
-        toolbar = tk.Frame(self)
-        toolbar.pack(side="top", fill="x")
+        self.toolbar = tk.Frame(self)
+        self.toolbar.pack(side="top", fill="x")
         b1 = tk.Button(
             self,
             text="Stop wireguard over wstunnel",
@@ -40,7 +40,7 @@ class CoreGUI(tk.Tk):
             fg="#FFFFFF",
             command=self.exit,
         )
-        b1.pack(in_=toolbar, side="left")
+        b1.pack(in_=self.toolbar, side="left")
 
         b2 = tk.Button(
             self,
@@ -49,7 +49,7 @@ class CoreGUI(tk.Tk):
             fg="#FFFFFF",
             command=self.withdraw_window,
         )
-        b2.pack(in_=toolbar, side="left")
+        b2.pack(in_=self.toolbar, side="left")
 
         self.text = tk.Text(self, wrap="word")
         self.text.pack(side="top", fill="both", expand=True)
