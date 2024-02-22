@@ -1,3 +1,4 @@
+from concurrent.futures import process
 import copy
 import hashlib
 import ipaddress
@@ -6,6 +7,7 @@ import logging
 import os
 import platform
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -188,6 +190,7 @@ class WStunnel:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             shell=True,
+            preexec_fn=os.setsid,
         )
 
         time.sleep(1)
@@ -205,11 +208,11 @@ class WStunnel:
     def stop(self):
         if self.is_running:
             self.log.info("Stopping...")
-            self.process.terminate()  # type: ignore
+            os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
 
             time.sleep(1)
             if self.is_running:
-                self.process.kill()  # type: ignore
+                os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)  # type: ignore
 
             self.log.info("Stopped!")
 
