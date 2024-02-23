@@ -213,6 +213,17 @@ class WStunnel:
             )
             return False
 
+    def _poll_is_stopped(self, timeout, poll_interval=0.05):
+
+        end = time.time() + timeout
+        while time.time() < end:
+            if not self.is_running:
+                break
+
+            time.sleep(poll_interval)
+
+        return not self.is_running
+
     def stop(self):
         if self.is_running:
             self.log.info("Stopping...")
@@ -220,25 +231,28 @@ class WStunnel:
             if platform.system() == "Windows":
                 self.log.info("Stopping using CTRL_C_EVENT")
                 self.process.send_signal(signal.CTRL_C_EVENT)
-                
-                time.sleep(3)
-                if self.is_running:
+
+                if not self._poll_is_stopped(3):
                     self.log.info("Stopping using CTRL_BREAK_EVENT")
                     self.process.send_signal(signal.CTRL_BREAK_EVENT)
-            
+
             else:
                 self.log.info("Stopping using SIGTERM")
                 self.process.terminate()
 
-            time.sleep(5)
-            if self.is_running:
+            if not self._poll_is_stopped(3):
                 self.log.info("Stopping using SIGKILL")
                 if platform.system() == "Windows":
                     self.process.kill()
                 else:
                     os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)  # type: ignore
 
-            self.log.info("Stopped!")
+            if self._poll_is_stopped(3):
+                self.log.info("Stopped!")
+                return True
+            else:
+                self.log.critical("Process is not stopped after a timeout of 3s")
+                return False
 
         else:
             self.log.info("Process is already stopped")
