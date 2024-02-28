@@ -1,18 +1,15 @@
 app:
-  
   ##### Default path if not specified #####
-  
+
   # For windows
   # wireguard_path: C:\Program Files\WireGuard\wireguard.exe
   # wstunnel_path: .\wstunnel.exe # download from https://github.com/erebe/wstunnel/releases
-  
+
   # For linux
   #wireguard_path: wg-quick #find in $PATH
   #wstunnel_path: ./wstunnel # download from https://github.com/erebe/wstunnel/releases
-  
 
   healthcheck:
-    
     # Number of tries to fetch public IP
     ip:
       enabled: True
@@ -22,18 +19,17 @@ app:
     ping:
       enabled: True
       interval: 10
-      restart: 
+      restart:
         wstunnel: True
         wireguard: False
 
-    # monitors wstunnel process state and check if wireguard tunnels are installed 
+    # monitors wstunnel process state and check if wireguard tunnels are installed
     process:
       enabled: True
       interval: 10
-      restart: 
+      restart:
         wstunnel: True
         wireguard: True
-
 
 wstunnel:
   # see https://github.com/erebe/wstunnel
@@ -50,13 +46,13 @@ wstunnel:
 wireguard:
   # For AllowedIPs in windows (app os==windows):
   # ::/0 is ignored and,
-  # ::/1, 8000::/1' is automatically added 
+  # ::/1, 8000::/1' is automatically added
 
   # Endpoint will be overwritten to wstunnel_listen_ip:wstunnel_listen_port
 
   # path to wireguard config. 'str' is ignored if set
   #path: ./test.conf
-  
+
   # wireguard config string
   str: |
     [Interface]
