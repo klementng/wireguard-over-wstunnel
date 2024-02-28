@@ -12,16 +12,13 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            TARGET: arm64
-            PLATFORM: macos_arm64
+            TARGET: macos_arm64
     
           - os: windows-latest
-            TARGET: x86_64
-            PLATFORM: windows_x86_64
+            TARGET: windows_x86_64
     
           - os: ubuntu-latest
-            TARGET: x86_64
-            PLATFORM: linux_x86_64
+            TARGET: linux_x86_64
   
     steps:
       - uses: actions/checkout@v2
@@ -39,12 +36,12 @@ jobs:
     
       - uses: actions/upload-artifact@v3
         with:
-          name: wgwst_{{matrix.TARGET}}
+          name: wgwst_${{ matrix.TARGET }}
           path: dist/
     
       - uses: actions/upload-artifact@v3
         with:
-          name: wgwst_{{matrix.TARGET}}
+          name: wgwst_{{ matrix.TARGET }}
           path: config.yml
 
 
