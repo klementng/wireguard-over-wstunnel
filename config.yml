@@ -10,9 +10,29 @@ app:
   #wireguard_path: wg-quick #find in $PATH
   #wstunnel_path: ./wstunnel # download from https://github.com/erebe/wstunnel/releases
   
-  # Number of tries to fetch public IP, set 0 to disable
-  healthcheck_ip_tries: 3
-  export_wireguard_conf: false # export temp conf to current directory
+
+  healthcheck:
+    
+    # Number of tries to fetch public IP
+    ip:
+      enabled: True
+      tries: 3
+
+    # Send a ping to wstunnel server
+    ping:
+      enabled: True
+      interval: 10
+      restart: 
+        wstunnel: True
+        wireguard: False
+
+    # monitors wstunnel process state and check if wireguard tunnels are installed 
+    process:
+      enabled: True
+      interval: 10
+      restart: 
+        wstunnel: True
+        wireguard: True
 
 
 wstunnel:

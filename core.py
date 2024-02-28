@@ -47,8 +47,8 @@ class WStunnel:
         if path is None:
             self.log.warning("'wstunnel_path' key is not set, using default")
 
-            path = r".\wstunnel.exe" if platform.system().lower() == "windows" else path
-            path = "./wstunnel" if platform.system().lower() == "linux" else path
+            path = r".\wstunnel.exe" if platform.system() == "Windows" else path
+            path = "./wstunnel" if platform.system() in ["Linux", "Darwin"] else path
 
         if path is None or not os.path.exists(path):
             self.log.critical("Executable at '%s' does not exist", path)
@@ -295,10 +295,11 @@ class Wireguard:
             self.log.warning("'wireguard_path' key is not set, using default")
             path = (
                 r"C:\Program Files\WireGuard\wireguard.exe"
-                if platform.system().lower() == "windows"
+                if platform.system() == "Windows"
                 else path
             )
-            path = "/usr/bin/wg-quick" if platform.system().lower() == "linux" else path
+            path = "/usr/bin/wg-quick" if platform.system() == "Linux" else path
+            path = "wg-quick" if platform.system() == "Darwin" else path
 
         if path is None or not os.path.exists(path):
             self.log.fatal(f"Executable at '{path}' does not exist")
