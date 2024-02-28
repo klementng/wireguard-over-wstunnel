@@ -41,7 +41,7 @@ jobs:
     
       - uses: actions/upload-artifact@v3
         with:
-          name: wgwst_{{ matrix.TARGET }}
+          name: wgwst_${{ matrix.TARGET }}
           path: config.yml
 
 
