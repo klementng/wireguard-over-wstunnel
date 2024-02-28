@@ -104,21 +104,20 @@ def main(
 
     hc: dict = config["app"].get("healthcheck", {})
     hc.setdefault(
+        "healthcheck",
         {
-            "healthcheck": {
-                "ip": {"enabled": True, "tries": 3},
-                "ping": {
-                    "enabled": True,
-                    "interval": 10,
-                    "restart": {"wstunnel": True, "wireguard": False},
-                },
-                "process": {
-                    "enabled": True,
-                    "interval": 10,
-                    "restart": {"wstunnel": True, "wireguard": True},
-                },
-            }
-        }
+            "ip": {"enabled": True, "tries": 3},
+            "ping": {
+                "enabled": True,
+                "interval": 10,
+                "restart": {"wstunnel": True, "wireguard": False},
+            },
+            "process": {
+                "enabled": True,
+                "interval": 10,
+                "restart": {"wstunnel": True, "wireguard": True},
+            },
+        },
     )
 
     if hc["ip"]["enabled"] is True:
