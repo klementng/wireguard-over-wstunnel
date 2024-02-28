@@ -31,6 +31,22 @@ def main(
     with open(args.config, encoding="utf-8") as f:
         log.info("Loading 'app' config...")
         config = yaml.safe_load(f)
+        config["app"].setdefault(
+            "healthcheck",
+            {
+                "ip": {"enabled": True, "tries": 3},
+                "ping": {
+                    "enabled": True,
+                    "interval": 10,
+                    "restart": {"wstunnel": True, "wireguard": False},
+                },
+                "process": {
+                    "enabled": True,
+                    "interval": 10,
+                    "restart": {"wstunnel": True, "wireguard": True},
+                },
+            },
+        )
 
     log.info("Detected OS: %s", platform.system())
 
@@ -102,23 +118,7 @@ def main(
             command=helper.run_as_thread(wireguard.restart),
         ).pack(in_=root_win.toolbar, side="left")
 
-    hc: dict = config["app"].get("healthcheck", {})
-    hc.setdefault(
-        "healthcheck",
-        {
-            "ip": {"enabled": True, "tries": 3},
-            "ping": {
-                "enabled": True,
-                "interval": 10,
-                "restart": {"wstunnel": True, "wireguard": False},
-            },
-            "process": {
-                "enabled": True,
-                "interval": 10,
-                "restart": {"wstunnel": True, "wireguard": True},
-            },
-        },
-    )
+    hc: dict = config["app"]["healthcheck"]
 
     if hc["ip"]["enabled"] is True:
         for i in hc["ip"]["tries"]:
