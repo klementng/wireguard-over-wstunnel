@@ -1,61 +1,51 @@
 name: Pyinstaller Build
-
 on:
   push:
     branches: [ main , 'dev']
   pull_request:
     branches: [ main ]
-    
+
 jobs:
-  linux-build:
-    runs-on: ubuntu-20.04
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+    include:
+      - os: macos-latest
+        TARGET: arm64
+        PLATFORM: macos_arm64
+
+      - os: windows-latest
+        TARGET: x86_64
+        PLATFORM: windows_x86_64
+
+      - os: ubuntu-latest
+        TARGET: x86_64
+        PLATFORM: linux_x86_64
+
+steps:
+  - uses: actions/checkout@v2
+  - run: echo ${{matrix.TARGET}}
+
+  - name: Setup Python
+    uses: actions/setup-python@v2
+    with:
+      python-version: 3.12
+
+  - name: Install dependencies
+    run: python -m pip install -r requirements.txt pyinstaller
     
-    steps:
-    - uses: actions/checkout@v2
+  - name: Build with pyinstaller
+    run: pyinstaller main.py --onefile --add-data=assets:assets --hide-console hide-late --uac-admin
 
-    - name: Setup Python
-      uses: actions/setup-python@v1
+  - uses: actions/upload-artifact@v3
       with:
-        python-version: 3.12
-    
-    - name: Install dependencies
-      run: python -m pip install -r requirements.txt pyinstaller
-      
-    - name: Build with pyinstaller
-      run: pyinstaller main.py --onefile --add-data=assets:assets --hide-console hide-late
-
-    - uses: actions/upload-artifact@v2
-      with:
-        name: wgwst-linux-x64
-        path: dist/
-        
-    - uses: actions/upload-artifact@v2
-      with:
-        name: wgwst-linux-x64
-        path: config.yml
-
-  windows-build:
-    runs-on: windows-latest
-    steps:
-    - uses: actions/checkout@v2
-
-    - name: Setup Python
-      uses: actions/setup-python@v1
-      with:
-        python-version: 3.12
-    
-    - name: Install dependencies
-      run: python -m pip install -r requirements.txt pyinstaller
-      
-    - name: Build with pyinstaller
-      run: pyinstaller main.py --onefile --add-data=assets:assets --hide-console hide-late --uac-admin
-
-    - uses: actions/upload-artifact@v2
-      with:
-        name: wgwst-windows-x64
+        name: wgwst_{{matrix.TARGET}}
         path: dist/
 
-    - uses: actions/upload-artifact@v2
+  - uses: actions/upload-artifact@v3
       with:
-        name: wgwst-windows-x64
+        name: wgwst_{{matrix.TARGET}}
         path: config.yml
+
+
