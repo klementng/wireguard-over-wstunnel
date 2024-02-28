@@ -10,40 +10,40 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-    include:
-      - os: macos-latest
-        TARGET: arm64
-        PLATFORM: macos_arm64
-
-      - os: windows-latest
-        TARGET: x86_64
-        PLATFORM: windows_x86_64
-
-      - os: ubuntu-latest
-        TARGET: x86_64
-        PLATFORM: linux_x86_64
-
-steps:
-  - uses: actions/checkout@v2
-  - run: echo ${{matrix.TARGET}}
-
-  - name: Setup Python
-    uses: actions/setup-python@v2
-    with:
-      python-version: 3.12
-
-  - name: Install dependencies
-    run: python -m pip install -r requirements.txt pyinstaller
+        include:
+          - os: macos-latest
+            TARGET: arm64
+            PLATFORM: macos_arm64
     
-  - name: Build with pyinstaller
-    run: pyinstaller main.py --onefile --add-data=assets:assets --hide-console hide-late --uac-admin
+          - os: windows-latest
+            TARGET: x86_64
+            PLATFORM: windows_x86_64
+    
+          - os: ubuntu-latest
+            TARGET: x86_64
+            PLATFORM: linux_x86_64
 
-  - uses: actions/upload-artifact@v3
+  steps:
+    - uses: actions/checkout@v2
+      run: echo ${{matrix.TARGET}}
+  
+    - name: Setup Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.12
+  
+    - name: Install dependencies
+      run: python -m pip install -r requirements.txt pyinstaller
+      
+    - name: Build with pyinstaller
+      run: pyinstaller main.py --onefile --add-data=assets:assets --hide-console hide-late --uac-admin
+  
+    - uses: actions/upload-artifact@v3
       with:
         name: wgwst_{{matrix.TARGET}}
         path: dist/
-
-  - uses: actions/upload-artifact@v3
+  
+    - uses: actions/upload-artifact@v3
       with:
         name: wgwst_{{matrix.TARGET}}
         path: config.yml
