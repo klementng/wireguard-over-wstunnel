@@ -59,7 +59,7 @@ def main(
 
     attempts = 0
     while not helper.healthcheck_process(
-        wireguard, wstunnel, restart_wg=False, log=False
+        wireguard, wstunnel, restart_wg=False, restart_wst=False, log=False
     ):
         attempts += 1
 
