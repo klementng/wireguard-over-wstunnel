@@ -121,7 +121,7 @@ def main(
     hc: dict = config["app"]["healthcheck"]
 
     if hc["ip"]["enabled"] is True:
-        for i in hc["ip"]["tries"]:
+        for i in range(hc["ip"]["tries"]):
             if isinstance(stop_event, threading.Event) and stop_event.is_set():
                 break
 
