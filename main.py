@@ -105,17 +105,19 @@ def main(
     hc: dict = config["app"].get("healthcheck", {})
     hc.setdefault(
         {
-            "ip": {"enabled": True, "tries": 3},
-            "ping": {
-                "enabled": True,
-                "interval": 10,
-                "restart": {"wstunnel": True, "wireguard": False},
-            },
-            "process": {
-                "enabled": True,
-                "interval": 10,
-                "restart": {"wstunnel": True, "wireguard": True},
-            },
+            "healthcheck": {
+                "ip": {"enabled": True, "tries": 3},
+                "ping": {
+                    "enabled": True,
+                    "interval": 10,
+                    "restart": {"wstunnel": True, "wireguard": False},
+                },
+                "process": {
+                    "enabled": True,
+                    "interval": 10,
+                    "restart": {"wstunnel": True, "wireguard": True},
+                },
+            }
         }
     )
 
@@ -156,9 +158,7 @@ def main(
                 )
 
         if hc["ping"]["enabled"]:
-            exec_time = time_ping + datetime.timedelta(
-                seconds=hc["process"]["interval"]
-            )
+            exec_time = time_ping + datetime.timedelta(seconds=hc["ping"]["interval"])
             if datetime.datetime.now() > exec_time:
                 time_ping = datetime.datetime.now()
 
