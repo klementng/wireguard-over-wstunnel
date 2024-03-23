@@ -90,14 +90,18 @@ def main(
             sys.exit(1)
 
         if not wireguard.is_running:
-            if wireguard.start():
+            if wireguard in active_processes:
+                wireguard.restart()
+            elif wireguard.start():
                 active_processes.append(wireguard)
 
         if not wstunnel.is_running:
-            if wstunnel.start():
+            if wstunnel in active_processes:
+                wstunnel.restart()
+            elif wstunnel.start():
                 active_processes.append(wstunnel)
 
-        time.sleep(3)
+        time.sleep(5)
 
     if isinstance(root_win, CoreGUI):
         tk.Button(

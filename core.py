@@ -421,9 +421,7 @@ class Wireguard:
     def start(self):
         self.log.info(f"Starting {self.iface_name}...")
 
-        self.remove_orphan_iface()
-
-        if platform.system().lower() == "windows":
+        if platform.system() == "Windows":
             action = "/installtunnelservice"
         else:
             action = "up"
@@ -432,7 +430,7 @@ class Wireguard:
 
         if status.returncode == 0:
             self.log.info("Started wireguard!")
-            return True
+            return self.is_running
         else:
             self.log.critical(
                 f"Unable to start wireguard. Program return status code of: {status.returncode}"
