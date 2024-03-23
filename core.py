@@ -187,7 +187,7 @@ class WStunnel:
         kw = {
             "stdout": subprocess.PIPE,
             "stderr": subprocess.PIPE,
-            "shell": True,
+            # "shell": True,
         }
 
         if platform.system() == "Windows":
@@ -208,8 +208,9 @@ class WStunnel:
             return True
         else:
             self.log.critical(
-                "Unable to start wstunnel. Process return a status code of: %s",
+                "Unable to start wstunnel. Process return a status code of: %s. %s",
                 self.process.returncode,
+                self.process.stderr.read()
             )
             return False
 
