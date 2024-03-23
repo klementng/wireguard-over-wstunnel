@@ -187,7 +187,7 @@ class WStunnel:
         kw = {
             "stdout": subprocess.PIPE,
             "stderr": subprocess.PIPE,
-            "shell": True,
+            # "shell": True,
         }
 
         if platform.system() == "Windows":
@@ -208,8 +208,9 @@ class WStunnel:
             return True
         else:
             self.log.critical(
-                "Unable to start wstunnel. Process return a status code of: %s",
+                "Unable to start wstunnel. Process return a status code of: %s. %s",
                 self.process.returncode,
+                self.process.stderr.read()
             )
             return False
 
@@ -421,9 +422,7 @@ class Wireguard:
     def start(self):
         self.log.info(f"Starting {self.iface_name}...")
 
-        self.remove_orphan_iface()
-
-        if platform.system().lower() == "windows":
+        if platform.system() == "Windows":
             action = "/installtunnelservice"
         else:
             action = "up"
@@ -432,7 +431,7 @@ class Wireguard:
 
         if status.returncode == 0:
             self.log.info("Started wireguard!")
-            return True
+            return self.is_running
         else:
             self.log.critical(
                 f"Unable to start wireguard. Program return status code of: {status.returncode}"
