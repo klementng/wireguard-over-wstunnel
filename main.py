@@ -215,7 +215,7 @@ if __name__ == "__main__":
 
     try:
 
-        if args.nogui is False:
+        if args.nogui is False and args.export is False:
             root = CoreGUI(helper.get_assets_path("assets/icon.png"))
 
             stop_event = threading.Event()
