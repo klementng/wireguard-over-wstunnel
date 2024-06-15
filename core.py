@@ -210,11 +210,11 @@ class WStunnel:
             self.log.critical(
                 "Unable to start wstunnel. Process return a status code of: %s. %s",
                 self.process.returncode,
-                self.process.stderr.read()
+                self.process.stderr.read(),
             )
             return False
 
-    def _poll_is_stopped(self, timeout, poll_interval=0.05):
+    def _poll_is_stopped_for(self, timeout, poll_interval=0.05):
 
         end = time.time() + timeout
         while time.time() < end:
@@ -233,7 +233,7 @@ class WStunnel:
                 self.log.info("Stopping using CTRL_C_EVENT")
                 self.process.send_signal(signal.CTRL_C_EVENT)
 
-                if not self._poll_is_stopped(3):
+                if not self._poll_is_stopped_for(3):
                     self.log.info("Stopping using CTRL_BREAK_EVENT")
                     self.process.send_signal(signal.CTRL_BREAK_EVENT)
 
@@ -241,14 +241,14 @@ class WStunnel:
                 self.log.info("Stopping using SIGTERM")
                 self.process.terminate()
 
-            if not self._poll_is_stopped(3):
+            if not self._poll_is_stopped_for(3):
                 self.log.info("Stopping using SIGKILL")
                 if platform.system() == "Windows":
                     self.process.kill()
                 else:
                     os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)  # type: ignore
 
-            if self._poll_is_stopped(3):
+            if self._poll_is_stopped_for(3):
                 self.log.info("Stopped!")
                 return True
             else:
