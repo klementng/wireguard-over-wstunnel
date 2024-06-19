@@ -428,7 +428,7 @@ class Wireguard:
 
         if status.returncode == 0:
             self.log.info("Started wireguard!")
-            return self.is_running
+            return True
         else:
             self.log.critical(
                 f"Unable to start wireguard. Program return status code of: {status.returncode}"
