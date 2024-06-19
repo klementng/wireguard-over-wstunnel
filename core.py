@@ -230,12 +230,8 @@ class WStunnel:
             self.log.info("Stopping...")
 
             if platform.system() == "Windows":
-                self.log.info("Stopping using CTRL_C_EVENT")
-                self.process.send_signal(signal.CTRL_C_EVENT)
-
-                if not self._poll_is_stopped_for(3):
-                    self.log.info("Stopping using CTRL_BREAK_EVENT")
-                    self.process.send_signal(signal.CTRL_BREAK_EVENT)
+                self.log.info("Stopping using CTRL_BREAK_EVENT")
+                self.process.send_signal(signal.CTRL_BREAK_EVENT)
 
             else:
                 self.log.info("Stopping using SIGTERM")
@@ -243,6 +239,7 @@ class WStunnel:
 
             if not self._poll_is_stopped_for(3):
                 self.log.info("Stopping using SIGKILL")
+
                 if platform.system() == "Windows":
                     self.process.kill()
                 else:
