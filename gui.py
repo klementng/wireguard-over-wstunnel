@@ -1,6 +1,5 @@
 import logging
 import tkinter as tk
-
 import pystray
 from PIL import Image
 

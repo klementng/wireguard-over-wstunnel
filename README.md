@@ -61,7 +61,7 @@ _Using source code_
 Additional Options:
 
 ```text
-usage: main.py [-h] [--config CONFIG] [--clean] [--nogui] [--log_level LOG_LEVEL]
+usage: main.py [-h] [--config CONFIG] [--clean] [--export] [--nogui] [--log_level LOG_LEVEL]
 
 Wireguard over wstunnel
 
@@ -70,7 +70,8 @@ options:
   --config CONFIG, -c CONFIG
                         path to program config
   --clean               clean wireguard tunnel that are not properly stopped
-  --nogui               start with no gui interface
+  --export              export wireguard config and exit
+  --nogui               start with no gui
   --log_level LOG_LEVEL
                         set logging level
 ```

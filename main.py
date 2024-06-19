@@ -207,15 +207,21 @@ if __name__ == "__main__":
     )
 
     parser.add_argument("--log_level", help="set logging level", default="INFO")
+    parser.add_argument("--log_file", help="set logfile path", default="output.log")
     args = parser.parse_args()
 
     logging.root.setLevel(args.log_level)
+
+    if args.log_file != "":
+        fn = logging.FileHandler(args.log_file)
+        fn.setFormatter(logging.Formatter("%(levelname)s - %(name)s - %(message)s"))
+        logging.root.addHandler(fn)
 
     helper.elevate_user()
 
     try:
 
-        if args.nogui is False:
+        if args.nogui is False and args.export is False:
             root = CoreGUI(helper.get_assets_path("assets/icon.png"))
 
             stop_event = threading.Event()
@@ -241,3 +247,4 @@ if __name__ == "__main__":
 
     finally:
         cleanup()
+        time.sleep(1)
