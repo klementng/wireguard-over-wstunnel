@@ -4,4 +4,4 @@ pystray==0.19.5
 PyYAML==6.0.1
 requests==2.32.3
 safe_exit==0.1.2
-wgconfig==1.0.2
+wgconfig==1.0.3
