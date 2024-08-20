@@ -260,6 +260,7 @@ class WStunnel:
     def restart(self):
         self.log.info("Restarting...")
         self.stop()
+        time.sleep(1)
         self.start()
 
     def cleanup(self):
@@ -463,6 +464,7 @@ class Wireguard:
 
     def restart(self):
         self.stop()
+        time.sleep(3)
         self.start()
 
     def cleanup(self):
