@@ -67,7 +67,7 @@ options:
   --config CONFIG, -c CONFIG
                         path to program config
   --nogui               start with no gui
-F```
+```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
