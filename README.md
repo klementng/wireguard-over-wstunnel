@@ -76,7 +76,3 @@ options:
 Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-## Icons
-
-- <a href="https://www.flaticon.com/free-icons/pipe" title="pipe icons">Pipe icons in (assets/icon) created by Freepik - Flaticon</a>
