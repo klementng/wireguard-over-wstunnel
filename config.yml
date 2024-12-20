@@ -22,8 +22,8 @@ wstunnel: # see https://github.com/erebe/wstunnel
 wireguard:
   path:
     windows: C:\Program Files\WireGuard\wireguard.exe
-    linux: /usr/bin/wireguard
-    darwin: /usr/local/bin/wireguard
+    linux: /usr/bin/wg-quick
+    darwin: /usr/local/bin/wg-quick
 
   config:
     #path: ./test.conf
