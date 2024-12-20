@@ -1,68 +1,64 @@
 app:
-  ##### Default path if not specified #####
+  logging:
+    file: output.log
+    level: INFO
 
-  # For windows
-  # wireguard_path: C:\Program Files\WireGuard\wireguard.exe
-  # wstunnel_path: .\wstunnel.exe # download from https://github.com/erebe/wstunnel/releases
+wstunnel: # see https://github.com/erebe/wstunnel
+  path:
+    windows: .\wstunnel.exe
+    linux: ./wstunnel
+    darwin: ./wstunnel
 
-  # For linux
-  #wireguard_path: wg-quick #find in $PATH
-  #wstunnel_path: ./wstunnel # download from https://github.com/erebe/wstunnel/releases
+  args:
+    # Required
+    server: wss://www.example.com:443
+    local-to-remote: udp://0.0.0.0:51820:127.0.0.1:51820?timeout_sec=0
 
-  healthcheck:
-    # Number of tries to fetch public IP
-    ip:
-      enabled: True
-      tries: 3
-
-    # Send a ping to wstunnel server
-    ping:
-      enabled: True
-      interval: 10
-      restart:
-        wstunnel: True
-        wireguard: False
-
-    # monitors wstunnel process state and check if wireguard tunnels are installed
-    process:
-      enabled: True
-      interval: 10
-      restart:
-        wstunnel: True
-        wireguard: True
-
-wstunnel:
-  # see https://github.com/erebe/wstunnel
-
-  # Required
-  - server: wss://www.example.com:443
-  - local-to-remote: udp://0.0.0.0:51820:127.0.0.1:51820?timeout_sec=0 # if multiple local-to-remote is set, the first one will be used to set wireguard endpoint server
-
-  # Optional
-  #- http-upgrade-path-prefix: wstunnel
-  #- http-upgrade-credentials: user:pass
-  #- tls-sni-override: wss.server.example.com
+    # Optional
+    #http-upgrade-path-prefix: ...
+    #http-upgrade-credentials: ...
+    #tls-sni-override: wss.server.example.com
 
 wireguard:
-  # For AllowedIPs in windows (app os==windows):
-  # ::/0 is ignored and,
-  # ::/1, 8000::/1' is automatically added
+  path:
+    windows: C:\Program Files\WireGuard\wireguard.exe
+    linux: /usr/bin/wireguard
+    darwin: /usr/local/bin/wireguard
 
-  # Endpoint will be overwritten to wstunnel_listen_ip:wstunnel_listen_port
+  config:
+    #path: ./test.conf
+    str:
+      | # Ignored if 'path' is set, AllowedIPs & Address will be replaced automatically
+      [Interface]
+      PrivateKey=
+      Address=
+      DNS=1.1.1.1, 8.8.8.8
 
-  # path to wireguard config. 'str' is ignored if set
-  #path: ./test.conf
+      [Peer]
+      PublicKey=
+      PresharedKey=
+      AllowedIPs = 0.0.0.0/0, ::/0
+      PersistentKeepalive = 20
+      Endpoint = 127.0.0.1:51820
 
-  # wireguard config string
-  str: |
-    [Interface]
-    PrivateKey=
-    Address=
-    DNS=1.1.1.1, 8.8.8.8
+healthcheck:
+  ip: # Number of tries to fetch public IP at the start of connection (stops after 5 times)
+    enabled: True
+    interval: 15
+    restart:
+      wstunnel: False
+      wireguard: False
 
-    [Peer]
-    PublicKey=
-    PresharedKey=
-    AllowedIPs = 0.0.0.0/0, ::/0
-    PersistentKeepalive = 20
-    Endpoint = 127.0.0.1:51820
+  ping: # Send a ping to wstunnel server every n secs
+    enabled: True
+    interval: 30
+    restart:
+      wstunnel: True
+      wireguard: False
+
+  state: # monitors wstunnel process state and check if wireguard tunnels are installed
+    enabled: True
+    interval: 5
+    restart:
+      wstunnel: True
+      wireguard: True

@@ -1,9 +1,9 @@
 name: Pyinstaller Build
 on:
   push:
-    branches: [ main , 'dev']
+    branches: [main, "dev"]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build:
@@ -13,35 +13,33 @@ jobs:
         include:
           - os: macos-latest
             TARGET: macos_arm64
-    
+
           - os: windows-latest
             TARGET: windows_x86_64
-    
+
           - os: ubuntu-latest
             TARGET: linux_x86_64
-  
+
     steps:
       - uses: actions/checkout@v2
-    
+
       - name: Setup Python
         uses: actions/setup-python@v2
         with:
           python-version: 3.12
-    
+
       - name: Install dependencies
         run: python -m pip install -r requirements.txt pyinstaller
-        
+
       - name: Build with pyinstaller
-        run: pyinstaller main.py --onefile --add-data=assets:assets --hide-console hide-late --uac-admin
-    
+        run: pyinstaller main.py --onefile --hide-console hide-late --uac-admin
+        #--add-data=assets:assets
       - uses: actions/upload-artifact@v3
         with:
           name: wgwst_${{ matrix.TARGET }}
           path: dist/
-    
+
       - uses: actions/upload-artifact@v3
         with:
           name: wgwst_${{ matrix.TARGET }}
           path: config.yml
-
-
