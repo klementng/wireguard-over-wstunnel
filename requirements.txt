@@ -5,4 +5,4 @@ pystray==0.19.5
 PyYAML==6.0.2
 PyYAML==6.0.2
 Requests==2.32.3
-wgconfig==1.0.4
+wgconfig==1.1.0
