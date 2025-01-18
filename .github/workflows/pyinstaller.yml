@@ -34,10 +34,13 @@ jobs:
       - name: Build with pyinstaller
         run: pyinstaller main.py --onefile --hide-console hide-late --uac-admin
         #--add-data=assets:assets
+
+      - name: copy config file
+        run: cp config.yml dist/
         
       - uses: actions/upload-artifact@v4
         with:
           name: wgwst_${{ matrix.TARGET }}
           path: |
-            dist/
-            config.yml
+            dist/*
+            
