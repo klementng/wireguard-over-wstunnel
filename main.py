@@ -106,7 +106,7 @@ def main():
         elevate_user()
 
         manager = ProcessManager()
-        manager.add(wst)
+        manager.add(wst)  # wst must start first
         manager.add(wg)
         manager.add(hc_ping)
         manager.add(hc_state)

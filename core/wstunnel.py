@@ -214,6 +214,22 @@ class WstunnelProcess(Process):
                 )
 
                 self.process_logger_thread.start()
+
+                time.sleep(3)
+                # begin dns resolution for wstunnel
+                target_ip = (
+                    "127.0.0.1"
+                    if self.config.listen_ip == "0.0.0.0"
+                    else self.config.listen_ip
+                )
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                    sock.sendto(
+                        "start".encode(),
+                        (target_ip, self.config.listen_port),
+                    )
+
+                time.sleep(3)
+
                 self.log.info("Started wstunnel!")
 
                 return
