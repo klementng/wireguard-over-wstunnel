@@ -1,4 +1,3 @@
-from ast import Pass
 import logging
 import platform
 import subprocess

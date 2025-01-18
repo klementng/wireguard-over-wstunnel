@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import platform
@@ -115,9 +116,29 @@ class WstunnelConfig:
         endpoint_port = int(
             match.group("port") or (443 if endpoint_proto in ["wss", "https"] else 80)
         )
-        endpoint_ip = socket.gethostbyname(host)
+        endpoint_ip = WstunnelConfig.resolve_dns(host)
 
         return server, host, endpoint_port, endpoint_ip
+
+    @staticmethod
+    def resolve_dns(host, cache_file="conf/dns.json"):
+        cache = {}
+        if os.path.exists(cache_file):
+            with open(cache_file, "r") as file:
+                cache = json.load(file)
+
+        try:
+            ip = socket.gethostbyname(host)
+            cache[host] = ip
+            with open(cache_file, "w") as file:
+                json.dump(cache, file)
+        except socket.gaierror:
+            if host in cache:
+                ip = cache[host]
+            else:
+                raise WstunnelConfigError("Unable to resolve DNS.")
+
+        return ip
 
     @staticmethod
     def parse_tunnel_settings(config):
