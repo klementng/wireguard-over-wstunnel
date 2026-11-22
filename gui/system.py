@@ -6,6 +6,7 @@ import subprocess
 import sys
 
 from core.logger import logger
+from core.utils.system import owns_windows_console
 
 
 def get_app_dir() -> Path:
@@ -68,11 +69,8 @@ def hide_from_taskbar() -> None:
             logger.debug("Unable to set macOS accessory activation policy: %s", e)
     elif system == "Windows":
         try:
-            kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
-            hwnd = kernel32.GetConsoleWindow()
-            # Only hide a dedicated console window (not a shared interactive shell).
-            process_list = (ctypes.c_uint32 * 2)()
-            if hwnd and kernel32.GetConsoleProcessList(process_list, 2) == 1:
+            hwnd = ctypes.windll.kernel32.GetConsoleWindow()  # type: ignore[attr-defined]
+            if hwnd and owns_windows_console():
                 # SW_HIDE = 0
                 ctypes.windll.user32.ShowWindow(hwnd, 0)  # type: ignore[attr-defined]
         except Exception as e:

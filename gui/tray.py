@@ -5,7 +5,13 @@ import threading
 from PIL import Image, ImageDraw
 import pystray
 
-from core import Application, clean_wireguard
+from core import (
+    Application,
+    clean_wireguard,
+    configure_logging,
+    load_config,
+    require,
+)
 from core.logger import logger
 
 from .system import get_app_dir, hide_from_taskbar, open_path
@@ -47,18 +53,26 @@ def _create_icon(color: str, size: int = ICON_SIZE) -> Image.Image:
     return image.resize((size, size), Image.Resampling.LANCZOS)
 
 
+def _format_error(message: str, limit: int = 80) -> str:
+    single_line = " ".join(message.split())
+    if len(single_line) <= limit:
+        return single_line
+    return f"{single_line[: limit - 3]}..."
+
+
 class TrayApp:
     """Minimal system tray UI for controlling an Application instance."""
 
     def __init__(
         self,
-        app: Application,
+        app: Application | None,
         *,
         config: dict | None = None,
         config_path: str | Path | None = None,
         auto_connect: bool = False,
         hide_taskbar: bool = True,
         notifications: bool = True,
+        initial_error: str | None = None,
     ) -> None:
         self.app = app
         self.config = config
@@ -69,7 +83,9 @@ class TrayApp:
 
         self._lock = threading.Lock()
         self._quitting = False
-        self._state = TunnelState.DISCONNECTED
+        self._logging_configured = config is not None
+        self._error_message = initial_error
+        self._state = TunnelState.ERROR if initial_error else TunnelState.DISCONNECTED
         self._icons = {
             state: _create_icon(color) for state, color in _STATE_COLORS.items()
         }
@@ -78,6 +94,10 @@ class TrayApp:
     @property
     def state(self) -> TunnelState:
         return self._state
+
+    @property
+    def error_message(self) -> str | None:
+        return self._error_message
 
     @property
     def _is_busy(self) -> bool:
@@ -116,22 +136,66 @@ class TrayApp:
         except Exception as e:
             logger.debug("Unable to send desktop notification: %s", e)
 
-    def _set_state(self, state: TunnelState) -> None:
+    def _build_title(self) -> str:
+        if self._state == TunnelState.ERROR and self._error_message:
+            return f"{APP_TITLE} - Error: {_format_error(self._error_message, 60)}"
+        return f"{APP_TITLE} - {self._state.value}"
+
+    def _set_state(self, state: TunnelState, *, error: str | None = None) -> None:
         self._state = state
+        self._error_message = error if state == TunnelState.ERROR else None
         icon = self._icon
         if icon is None:
             return
 
         icon.icon = self._icons[state]
-        icon.title = f"{APP_TITLE} - {state.value}"
+        icon.title = self._build_title()
         icon.update_menu()
 
     def _run_in_worker(self, target, name: str) -> None:
         threading.Thread(target=target, daemon=True, name=name).start()
 
+    def _reload_config_locked(self) -> bool:
+        """Reload config_path and rebuild Application while holding self._lock."""
+        if self.config_path is None:
+            return self.app is not None
+
+        try:
+            config = load_config(str(self.config_path))
+            app_cfg = require(config, "app")
+            if not self._logging_configured:
+                configure_logging(app_cfg)
+                self._logging_configured = True
+            app = Application(config)
+        except Exception as e:
+            logger.error("Invalid config: %s", e)
+            self._set_state(TunnelState.ERROR, error=str(e))
+            self._notify(f"Invalid config: {e}")
+            return False
+
+        self.config = config
+        self.app = app
+        self._set_state(TunnelState.DISCONNECTED)
+        return True
+
+    def reload_config(self) -> bool:
+        with self._lock:
+            if self._quitting or self._state == TunnelState.CONNECTED:
+                return False
+
+            ok = self._reload_config_locked()
+            if ok:
+                self._notify("Config reloaded.")
+            return ok
+
     def connect(self) -> None:
         with self._lock:
             if self._quitting or self._state == TunnelState.CONNECTED:
+                return
+
+            if self.app is None and not self._reload_config_locked():
+                return
+            if self.app is None:
                 return
 
             self._set_state(TunnelState.CONNECTING)
@@ -139,7 +203,7 @@ class TrayApp:
                 self.app.start()
             except Exception as e:
                 logger.exception("Failed to start tunnel")
-                self._set_state(TunnelState.ERROR)
+                self._set_state(TunnelState.ERROR, error=str(e))
                 self._notify(f"Failed to connect: {e}")
             else:
                 self._set_state(TunnelState.CONNECTED)
@@ -147,7 +211,7 @@ class TrayApp:
 
     def disconnect(self) -> None:
         with self._lock:
-            if self._state == TunnelState.DISCONNECTED:
+            if self._state == TunnelState.DISCONNECTED or self.app is None:
                 return
 
             self._set_state(TunnelState.DISCONNECTING)
@@ -155,7 +219,7 @@ class TrayApp:
                 self.app.stop()
             except Exception as e:
                 logger.exception("Failed to stop tunnel")
-                self._set_state(TunnelState.ERROR)
+                self._set_state(TunnelState.ERROR, error=str(e))
                 self._notify(f"Failed to disconnect: {e}")
             else:
                 self._set_state(TunnelState.DISCONNECTED)
@@ -166,17 +230,23 @@ class TrayApp:
             if self._quitting:
                 return
 
-            self._set_state(TunnelState.DISCONNECTING)
-            try:
-                self.app.stop()
-            except Exception as e:
-                logger.exception("Failed to stop tunnel during reconnect")
-                self._set_state(TunnelState.ERROR)
-                self._notify(f"Reconnect failed: {e}")
-                return
+            if self.app is not None:
+                self._set_state(TunnelState.DISCONNECTING)
+                try:
+                    self.app.stop()
+                except Exception as e:
+                    logger.exception("Failed to stop tunnel during reconnect")
+                    self._set_state(TunnelState.ERROR, error=str(e))
+                    self._notify(f"Reconnect failed: {e}")
+                    return
 
             if self._quitting:
                 self._set_state(TunnelState.DISCONNECTED)
+                return
+
+            if self.app is None and not self._reload_config_locked():
+                return
+            if self.app is None:
                 return
 
             self._set_state(TunnelState.CONNECTING)
@@ -184,18 +254,19 @@ class TrayApp:
                 self.app.start()
             except Exception as e:
                 logger.exception("Failed to restart tunnel")
-                self._set_state(TunnelState.ERROR)
+                self._set_state(TunnelState.ERROR, error=str(e))
                 self._notify(f"Reconnect failed: {e}")
             else:
                 self._set_state(TunnelState.CONNECTED)
                 self._notify("Tunnel reconnected.")
 
     def clean_tunnels(self) -> None:
-        if self.config is None:
-            return
-
         with self._lock:
-            if self._quitting or self._state == TunnelState.CONNECTED:
+            if (
+                self.config is None
+                or self._quitting
+                or self._state == TunnelState.CONNECTED
+            ):
                 return
 
             try:
@@ -224,6 +295,11 @@ class TrayApp:
             return
         self._run_in_worker(self.reconnect, "tray-reconnect")
 
+    def _on_reload_config(self, _icon: pystray.Icon, _item: pystray.MenuItem) -> None:
+        if self._is_busy or self._quitting:
+            return
+        self._run_in_worker(self.reload_config, "tray-reload-config")
+
     def _on_clean(self, _icon: pystray.Icon, _item: pystray.MenuItem) -> None:
         if self._is_busy or self._quitting:
             return
@@ -234,7 +310,8 @@ class TrayApp:
 
     def _on_open_config(self, _icon: pystray.Icon, _item: pystray.MenuItem) -> None:
         if self.config_path is not None:
-            open_path(self.config_path)
+            if not open_path(self.config_path):
+                self._notify(f"Config file not found: {self.config_path.name}")
 
     def _on_open_log(self, _icon: pystray.Icon, _item: pystray.MenuItem) -> None:
         log_path = self._resolve_log_path()
@@ -249,11 +326,12 @@ class TrayApp:
 
         def shutdown() -> None:
             with self._lock:
-                self._set_state(TunnelState.DISCONNECTING)
-                try:
-                    self.app.stop()
-                except Exception:
-                    logger.exception("Error stopping tunnel during shutdown")
+                if self.app is not None:
+                    self._set_state(TunnelState.DISCONNECTING)
+                    try:
+                        self.app.stop()
+                    except Exception:
+                        logger.exception("Error stopping tunnel during shutdown")
             icon.stop()
 
         self._run_in_worker(shutdown, "tray-shutdown")
@@ -265,6 +343,12 @@ class TrayApp:
                 None,
                 enabled=False,
             ),
+            pystray.MenuItem(
+                lambda _item: f"Error: {_format_error(self._error_message or '')}",
+                None,
+                enabled=False,
+                visible=lambda _item: bool(self._error_message),
+            ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
                 lambda _item: (
@@ -272,29 +356,47 @@ class TrayApp:
                 ),
                 self._on_toggle,
                 default=True,
-                enabled=lambda _item: not self._is_busy and not self._quitting,
+                enabled=lambda _item: (
+                    not self._is_busy
+                    and not self._quitting
+                    and (self.app is not None or self.config_path is not None)
+                ),
             ),
             pystray.MenuItem(
                 "Reconnect",
                 self._on_reconnect,
                 enabled=lambda _item: (
-                    self._state in (TunnelState.CONNECTED, TunnelState.ERROR)
+                    self.app is not None
+                    and self._state in (TunnelState.CONNECTED, TunnelState.ERROR)
                     and not self._quitting
                 ),
             ),
         ]
 
-        if self.config is not None:
+        if self.config_path is not None:
             items.append(
                 pystray.MenuItem(
-                    "Clean Leftover Tunnels",
-                    self._on_clean,
+                    "Reload Config",
+                    self._on_reload_config,
                     enabled=lambda _item: (
                         self._state in (TunnelState.DISCONNECTED, TunnelState.ERROR)
                         and not self._quitting
                     ),
                 )
             )
+
+        items.append(
+            pystray.MenuItem(
+                "Clean Leftover Tunnels",
+                self._on_clean,
+                visible=lambda _item: self.config is not None,
+                enabled=lambda _item: (
+                    self.config is not None
+                    and self._state in (TunnelState.DISCONNECTED, TunnelState.ERROR)
+                    and not self._quitting
+                ),
+            )
+        )
 
         items.extend(
             [
@@ -306,16 +408,16 @@ class TrayApp:
         if self.config_path is not None:
             items.append(pystray.MenuItem("Open Config", self._on_open_config))
 
-        if self._resolve_log_path() is not None:
-            items.append(
-                pystray.MenuItem(
-                    "Open Log File",
-                    self._on_open_log,
-                    enabled=lambda _item: (
-                        (path := self._resolve_log_path()) is not None and path.exists()
-                    ),
-                )
+        items.append(
+            pystray.MenuItem(
+                "Open Log File",
+                self._on_open_log,
+                visible=lambda _item: self._resolve_log_path() is not None,
+                enabled=lambda _item: (
+                    (path := self._resolve_log_path()) is not None and path.exists()
+                ),
             )
+        )
 
         items.extend(
             [
@@ -328,7 +430,9 @@ class TrayApp:
 
     def _setup(self, icon: pystray.Icon) -> None:
         icon.visible = True
-        if self.auto_connect:
+        if self._error_message:
+            self._notify(f"Invalid config: {self._error_message}")
+        elif self.auto_connect:
             self.connect()
 
     def run(self) -> None:
@@ -338,7 +442,7 @@ class TrayApp:
         self._icon = pystray.Icon(
             APP_NAME,
             icon=self._icons[self._state],
-            title=f"{APP_TITLE} - {self._state.value}",
+            title=self._build_title(),
             menu=self._build_menu(),
         )
         try:
@@ -346,4 +450,5 @@ class TrayApp:
         finally:
             self._quitting = True
             with self._lock:
-                self.app.stop()
+                if self.app is not None:
+                    self.app.stop()

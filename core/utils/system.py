@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import sys
 
+import psutil
+
 from ..exception import ExecutableNotFoundError
 from ..logger import logger
 
@@ -13,6 +15,44 @@ def is_admin() -> bool:
     if platform.system() == "Windows":
         return bool(ctypes.windll.shell32.IsUserAnAdmin())  # type: ignore[attr-defined]
     return os.geteuid() == 0  # type: ignore[attr-defined]
+
+
+def owns_windows_console() -> bool:
+    """Return True if this Windows process has no console or owns a dedicated one.
+
+    A double-clicked Windows executable has either no console, a console hidden by
+    PyInstaller (``--hide-console``), or a dedicated console shared only with its
+    PyInstaller ``--onefile`` bootloader parent.
+    """
+    if platform.system() != "Windows":
+        return False
+
+    try:
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        user32 = ctypes.windll.user32  # type: ignore[attr-defined]
+        hwnd = kernel32.GetConsoleWindow()
+        if not hwnd or not user32.IsWindowVisible(hwnd):
+            return True
+
+        buf = (ctypes.c_uint32 * 8)()
+        count = kernel32.GetConsoleProcessList(buf, len(buf))
+        if count == 0:
+            return False
+        if count == 1:
+            return True
+
+        if count == 2 and getattr(sys, "frozen", False):
+            pids = {buf[0], buf[1]}
+            ppid = os.getppid()
+            if pids == {os.getpid(), ppid}:
+                parent_exe = psutil.Process(ppid).exe()
+                return os.path.normcase(
+                    os.path.abspath(parent_exe)
+                ) == os.path.normcase(os.path.abspath(sys.executable))
+
+        return False
+    except Exception:
+        return False
 
 
 def require_executable(path: str, config_key: str) -> str:

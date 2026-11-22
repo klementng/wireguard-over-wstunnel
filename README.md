@@ -61,7 +61,7 @@ To create a standalone binary using PyInstaller, follow these steps:
    ```
 
 6. Edit [config.yml](./config.yml).
-7. Start the program:
+7. Start the program (on Windows, double-clicking `main.exe` automatically starts the system tray GUI):
 
    ```sh
    # CLI mode
@@ -94,8 +94,8 @@ To create a standalone binary using PyInstaller, follow these steps:
 ## Command Line Usage
 
 ```text
-usage: main.py [-h] [--config CONFIG] [--clean] [--gui] [--auto-connect]
-               [--detached]
+usage: main.py [-h] [--config CONFIG] [--clean] [--gui | --no-gui]
+               [--auto-connect] [--detached]
 
 Wireguard over wstunnel
 
@@ -104,7 +104,8 @@ options:
   --config CONFIG, -c CONFIG
                         path to program config
   --clean               clean wireguard tunnels that were not properly stopped
-  --gui                 start with the system tray GUI
+  --gui, --no-gui       start with the system tray GUI (default when
+                        double-clicked on Windows)
   --auto-connect        connect automatically when the tray GUI starts
   --detached            detach and run the tray GUI in the background
 
