@@ -5,9 +5,9 @@ app:
 
 wstunnel: # see https://github.com/erebe/wstunnel
   path:
-    windows: .\wstunnel.exe
-    linux: ./wstunnel
-    darwin: ./wstunnel
+    windows: wstunnel.exe # checks current folder and PATH (or .\wstunnel.exe)
+    linux: ./wstunnel # or 'wstunnel' if installed on PATH
+    darwin: wstunnel # Homebrew default (or ./wstunnel)
 
   args:
     # Required
@@ -22,17 +22,19 @@ wstunnel: # see https://github.com/erebe/wstunnel
 wireguard:
   path:
     windows: C:\Program Files\WireGuard\wireguard.exe
-    linux: /usr/bin/wg-quick
-    darwin: /usr/local/bin/wg-quick
+    linux: wg-quick # resolves via PATH (e.g. /usr/bin/wg-quick)
+    darwin: wg-quick # resolves via PATH (Intel & Apple Silicon Homebrew)
 
   config:
-    #path: ./test.conf
-    str:
-      | # Ignored if 'path' is set, AllowedIPs & Address will be replaced automatically
+    # Note: AllowedIPs & Endpoint are rewritten automatically.
+    # If MTU is not configured, it will be automatically set to 1280 to account for wstunnel overhead.
+    #path: ./wg0.conf
+    str: | # Ignored if 'path' is set
       [Interface]
       PrivateKey=
       Address=
       DNS=1.1.1.1, 8.8.8.8
+      MTU=1280
 
       [Peer]
       PublicKey=

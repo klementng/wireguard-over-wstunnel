@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 CONFIG_FOLDER = "./conf/"
 WIREGUARD_RUN_DIR = "/var/run/wireguard"
 IFACE_PREFIX = "wg-wst-"
+# Default IPv6 minimum MTU leaving room for IP + TCP + TLS + WebSocket + WireGuard overhead.
+DEFAULT_MTU = 1280
 
 
 @dataclass
@@ -58,7 +60,9 @@ class WireguardConfig:
         if wst_config is None:
             wg_str = cls._load_wg_string(config)
             iface_name = cls._interface_name(wg_str)
-            conf_path = os.path.abspath(os.path.join(CONFIG_FOLDER, f"{iface_name}.conf"))
+            conf_path = os.path.abspath(
+                os.path.join(CONFIG_FOLDER, f"{iface_name}.conf")
+            )
             return cls(
                 exec_path=exec_path,
                 exec_up_args=[],
@@ -116,9 +120,7 @@ class WireguardConfig:
                 else:
                     result.append(entry)
             except ValueError:
-                logger.warning(
-                    "Ignoring invalid AllowedIPs entry: %s", entry
-                )
+                logger.warning("Ignoring invalid AllowedIPs entry: %s", entry)
                 result.append(entry)
 
         return result
@@ -145,6 +147,13 @@ class WireguardConfig:
                 "wireguard config must define 'path' or a non-empty 'str'"
             )
         return wg_str
+
+    @staticmethod
+    def _apply_mtu(wg_config: WGConfig, default_mtu: int = DEFAULT_MTU) -> None:
+        """Default Interface MTU when unset to account for wstunnel overhead."""
+        if wg_config.interface.get("MTU") is None:
+            logger.debug("WireGuard MTU not set; defaulting to %d", default_mtu)
+            wg_config.add_attr(None, "MTU", str(default_mtu))
 
     @staticmethod
     def _interface_name(wg_str: str) -> str:
@@ -181,6 +190,8 @@ class WireguardConfig:
 
             if not wg_config.peers:
                 raise WireguardConfigError("wireguard config has no [Peer] section")
+
+            WireguardConfig._apply_mtu(wg_config)
 
             is_windows = platform.system().lower() == "windows"
             listen_ip = "127.0.0.1" if wst.listen_ip == "0.0.0.0" else wst.listen_ip

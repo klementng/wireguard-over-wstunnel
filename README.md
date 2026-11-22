@@ -28,7 +28,7 @@ On startup, the app automatically handles the wiring so you don't have to manage
 Features:
 
 1. **Resolves the server DNS** (also cached in `conf/dns.json`) and passes the resolved IP directly to `wstunnel` along with the matching TLS SNI and HTTP `Host` header, avoiding DNS deadlocks once the VPN is active.
-2. **Generates a runtime WireGuard config** in `conf/` that points `Endpoint` to the local `wstunnel` listener and excludes the server's IP from `AllowedIPs` to prevent routing loops.
+2. **Generates a runtime WireGuard config** in `conf/` that points `Endpoint` to the local `wstunnel` listener, excludes the server's IP from `AllowedIPs` to prevent routing loops, and defaults `MTU` to `1280` if not configured (to account for TCP/TLS/WebSocket overhead).
 3. **Starts `wstunnel` before WireGuard** and runs background health checks (tunnel state, ping, and public IP verification) with automatic recovery.
 4. **Tears down cleanly on exit** (or via `--clean`) to remove the WireGuard interface and stop `wstunnel`.
 
