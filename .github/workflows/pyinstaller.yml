@@ -4,43 +4,46 @@ on:
     branches: [main, "dev"]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
             TARGET: macos_arm64
+            PYI_FLAGS: "--hidden-import=pystray._darwin --hidden-import=AppKit"
 
           - os: windows-latest
             TARGET: windows_x86_64
+            PYI_FLAGS: "--uac-admin --hide-console hide-late --hidden-import=pystray._win32"
 
           - os: ubuntu-latest
             TARGET: linux_x86_64
+            PYI_FLAGS: "--hidden-import=pystray._xorg --hidden-import=pystray._gtk --hidden-import=pystray._appindicator"
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.11
+          python-version: 3.13
 
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt pyinstaller
+        run: python -m pip install -r requirements-build.txt
 
       - name: Build with pyinstaller
-        run: pyinstaller main.py --onefile --hide-console hide-late --uac-admin
-        #--add-data=assets:assets
+        run: python -m PyInstaller main.py --onefile ${{ matrix.PYI_FLAGS }}
 
-      - name: copy config file
+      - name: Copy config file
         run: cp config.yml dist/
-        
+
       - uses: actions/upload-artifact@v4
         with:
           name: wgwst_${{ matrix.TARGET }}
           path: |
             dist/*
-            

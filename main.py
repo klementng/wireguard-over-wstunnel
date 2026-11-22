@@ -1,135 +1,127 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 import argparse
-import ctypes
 import logging
-import os
 import platform
 import sys
-import time
-
-import yaml
 
 from core import (
-    HealthCheckConfig,
-    HealthCheckIP,
-    HealthCheckPing,
-    HealthCheckState,
-    ProcessManager,
-    WireguardConfig,
-    WireguardProcess,
-    WstunnelConfig,
-    WstunnelProcess,
+    Application,
+    ConfigError,
+    clean_wireguard,
+    configure_logging,
+    load_config,
+    require,
 )
-
-from gui import Interface
-
-
-LOGGING_FORMAT = "%(levelname)s - %(name)s - %(message)s"
-
-logging.basicConfig(
-    format=LOGGING_FORMAT,
-)
+from core.config import LOGGING_FORMAT
+from core.exception import ExecutableNotFoundError
+from core.logger import logger
+from core.utils.system import elevate, owns_windows_console
 
 
-logger = logging.getLogger("main")
+def _default_gui() -> bool:
+    """Default to tray GUI when double-clicked as a frozen Windows executable."""
+    return getattr(sys, "frozen", False) and owns_windows_console()
 
 
-def elevate_user():
-    logger.info("Elevating to superuser / admin")
-
-    sys_os = platform.system()
-
-    if sys_os == "Windows":
-        if not ctypes.windll.shell32.IsUserAnAdmin():  # type: ignore
-            ctypes.windll.shell32.ShellExecuteW(  # type: ignore
-                None, "runas", sys.executable, " ".join(sys.argv), None, 1
-            )
-            sys.exit(0)
-
-    elif sys_os in ["Linux", "Darwin"]:  # linux mac os
-        if os.geteuid() != 0:  # type: ignore
-            logger.info("Elevating via sudo: 'sudo echo'")
-            os.system("sudo echo")
-
-    else:
-        logger.critical("Unknown/Unsupported OS.")
-        sys.exit(1)
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Wireguard over wstunnel")
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Wireguard over wstunnel",
+        epilog="Run the program with --clean to remove leftover wg-wst-* interfaces.",
+    )
     parser.add_argument(
         "--config", "-c", help="path to program config", default="./config.yml"
     )
     parser.add_argument(
         "--clean",
-        help="clean wireguard tunnel that are not properly stopped",
+        help="clean wireguard tunnels that were not properly stopped",
         action="store_true",
     )
     parser.add_argument(
-        "--nogui",
-        help="start with no gui",
+        "--gui",
+        help="start with the system tray GUI (default when double-clicked on Windows)",
+        action=argparse.BooleanOptionalAction,
+        default=_default_gui(),
+    )
+    parser.add_argument(
+        "--auto-connect",
+        help="connect automatically when the tray GUI starts",
         action="store_true",
     )
+    parser.add_argument(
+        "--detached",
+        help="detach and run the tray GUI in the background",
+        action="store_true",
+    )
+    return parser.parse_args(argv)
 
-    args = parser.parse_args()
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    use_gui = args.gui and not args.clean
+
+    config: dict | None = None
+    startup_error: str | None = None
+
+    try:
+        config = load_config(args.config)
+        configure_logging(require(config, "app"))
+    except ConfigError as e:
+        if not use_gui:
+            logger.critical("%s", e)
+            return 2
+        logging.basicConfig(format=LOGGING_FORMAT, level=logging.INFO)
+        logger.error("Invalid config: %s", e)
+        startup_error = str(e)
 
     logger.info("Detected OS: %s", platform.system())
-    with open(args.config, encoding="utf-8") as f:
-        logger.info("Loading config...")
-        config = yaml.safe_load(f)
 
-    app_config = config["app"]
+    try:
+        elevate()
 
-    logging.root.setLevel(app_config["logging"]["level"])
-    if app_config["logging"]["file"] is not None:
-        fn = logging.FileHandler(app_config["logging"]["file"])
-        fn.setFormatter(logging.Formatter(LOGGING_FORMAT))
-        logging.root.addHandler(fn)
+        if args.clean:
+            if config is None:
+                return 2
+            return 0 if clean_wireguard(config) else 1
 
-    wst_config = WstunnelConfig.init(config["wstunnel"])
-    wg_config = WireguardConfig.init(config["wireguard"], wst_config)
-    hc_config = config["healthcheck"]
+        if use_gui:
+            from gui import TrayApp, detach_to_background
 
-    wst = WstunnelProcess(wst_config)
-    wg = WireguardProcess(wg_config)
+            if args.detached:
+                detach_to_background(argv)
 
-    hc_ping = HealthCheckPing(HealthCheckConfig.init(hc_config["ping"]), wg, wst)
-    hc_state = HealthCheckState(HealthCheckConfig.init(hc_config["state"]), wg, wst)
-    hc_ip = HealthCheckIP(HealthCheckConfig.init(hc_config["ip"]), wg, wst)
+            app: Application | None = None
+            if config is not None:
+                try:
+                    app = Application(config)
+                except (ConfigError, ExecutableNotFoundError) as e:
+                    logger.error("Invalid config: %s", e)
+                    startup_error = str(e)
 
-    if args.clean is True:
-        wg.reset()
-        return
+            TrayApp(
+                app,
+                config=config,
+                config_path=args.config,
+                auto_connect=args.auto_connect and app is not None,
+                initial_error=startup_error,
+            ).run()
+            return 0
 
-    else:
-        elevate_user()
+        if config is None:
+            return 2
 
-        manager = ProcessManager()
-        manager.add(wst)  # wst must start first
-        manager.add(wg)
-        manager.add(hc_ping)
-        manager.add(hc_state)
-        manager.add(hc_ip)
-        try:
-            if args.nogui:
-                manager.start()
-            else:
-                gui = Interface(manager)
-                gui.mainloop()
-        finally:
-            manager.stop()
+        Application(config).run()
+        return 0
+
+    except ConfigError as e:
+        logger.critical("%s", e)
+        return 2
+    except KeyboardInterrupt:
+        logger.info("Interrupted, shutting down...")
+        return 0
+    except Exception:
+        logger.critical("Caught an exception. Exiting...", exc_info=True)
+        return 1
 
 
 if __name__ == "__main__":
-
-    try:
-        main()
-    except (KeyboardInterrupt, SystemExit):
-        pass
-
-    except Exception:
-        logging.critical("Caught an exception. exiting...", exc_info=True)
-
-    finally:
-        time.sleep(1)
+    raise SystemExit(main())
