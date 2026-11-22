@@ -67,27 +67,6 @@ class WstunnelProcess(Process):
         # Some platforms/containers hide the socket; fall back to process liveness.
         return self.is_running
 
-    def _prime_tunnel(self) -> None:
-        """Send a single UDP packet so wstunnel resolves the server eagerly."""
-        if self.config.proto != "udp":
-            return
-
-        target_ip = (
-            "127.0.0.1" if self.config.listen_ip == "0.0.0.0" else self.config.listen_ip
-        )
-
-        for attempt in range(3):
-            try:
-                family = socket.AF_INET6 if ":" in target_ip else socket.AF_INET
-                with socket.socket(family, socket.SOCK_DGRAM) as sock:
-                    sock.sendto(b"start", (target_ip, self.config.listen_port))
-                return
-            except OSError as e:
-                logger.debug(
-                    "Unable to prime wstunnel (attempt %s): %s", attempt + 1, e
-                )
-                time.sleep(0.5)
-
     def start(self) -> None:
         if self.is_running:
             logger.debug("wstunnel is already running")
@@ -128,8 +107,6 @@ class WstunnelProcess(Process):
                 message = f"{message}: {' | '.join(self._recent_output)}"
             raise WstunnelRuntimeError(message)
 
-        self._prime_tunnel()
-
         logger.info("Started wstunnel!")
 
     def stop(self) -> None:
@@ -164,4 +141,3 @@ class WstunnelProcess(Process):
         self.stop()
         time.sleep(1)
         self.start()
-

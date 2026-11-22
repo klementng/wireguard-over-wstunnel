@@ -1,10 +1,11 @@
+from dataclasses import dataclass
+import ipaddress
 import json
 import os
 import platform
 import re
 import socket
-from dataclasses import dataclass
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 from core.utils.system import require_executable
 
@@ -15,7 +16,57 @@ DEFAULT_HTTP_PORT = 80
 DEFAULT_HTTPS_PORT = 443
 DNS_CACHE_FILE = os.path.join("conf", "dns.json")
 
-WSS_SCHEMES = {"ws", "wss", "http", "https"}
+TLS_SCHEMES = {"wss", "https", "wts"}
+WSS_SCHEMES = {"ws", "wss", "http", "https", "wts"}
+
+
+def _is_ip_address(value: str) -> bool:
+    try:
+        ipaddress.ip_address(value)
+        return True
+    except ValueError:
+        return False
+
+
+def _replace_server_host(server: str, ip: str) -> str:
+    """Replace the hostname in a server URL with a resolved IP address."""
+    parts = urlsplit(server)
+    formatted_ip = f"[{ip}]" if ":" in ip else ip
+
+    userinfo = ""
+    if parts.username is not None:
+        userinfo = parts.username
+        if parts.password is not None:
+            userinfo = f"{userinfo}:{parts.password}"
+        userinfo = f"{userinfo}@"
+
+    port = f":{parts.port}" if parts.port is not None else ""
+    netloc = f"{userinfo}{formatted_ip}{port}"
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+
+
+def _has_host_header(args: dict) -> bool:
+    for key in ("http-headers", "H"):
+        value = args.get(key)
+        headers = (
+            value
+            if isinstance(value, list | tuple)
+            else ([value] if isinstance(value, str) else [])
+        )
+        for header in headers:
+            if isinstance(header, str) and header.strip().lower().startswith("host:"):
+                return True
+    return False
+
+
+def _append_http_header(args: dict, header: str) -> None:
+    existing = args.get("http-headers")
+    if existing is None or existing is False:
+        args["http-headers"] = [header]
+    elif isinstance(existing, list | tuple):
+        args["http-headers"] = [*existing, header]
+    else:
+        args["http-headers"] = [existing, header]
 
 
 @dataclass
@@ -65,7 +116,9 @@ class WstunnelConfig:
         )
         return cls(
             exec_path=path,
-            exec_args=cls.generate_exec_args(config, path),
+            exec_args=cls.generate_exec_args(
+                config, path, host=host, endpoint_ip=endpoint_ip
+            ),
             server=server,
             host=host,
             endpoint_port=endpoint_port,
@@ -79,7 +132,13 @@ class WstunnelConfig:
         )
 
     @staticmethod
-    def generate_exec_args(config: dict, exec_path: str) -> list[str]:
+    def generate_exec_args(
+        config: dict,
+        exec_path: str,
+        *,
+        host: str | None = None,
+        endpoint_ip: str | None = None,
+    ) -> list[str]:
         args = config.get("args")
         if not isinstance(args, dict):
             raise WstunnelConfigError("Config key 'args' is not set")
@@ -88,6 +147,69 @@ class WstunnelConfig:
         server = args.pop("server", None)
         if not server:
             raise WstunnelConfigError("Config key 'server' is not set")
+
+        server_str = str(server)
+        using_proxy = bool(args.get("http-proxy") or args.get("p"))
+
+        # Connect directly to the pre-resolved IP so wstunnel does not rely on
+        # OS/tunnel DNS at runtime (which fails on Windows or after WG starts).
+        if host and endpoint_ip and not using_proxy and not _is_ip_address(host):
+            parts = urlsplit(server_str)
+            server_str = _replace_server_host(server_str, endpoint_ip)
+
+            if (
+                parts.scheme in TLS_SCHEMES
+                and not args.get("tls-sni-override")
+                and not args.get("tls-sni-disable")
+            ):
+                args["tls-sni-override"] = host
+
+            if not args.get("http-headers-file") and not _has_host_header(args):
+                default_port = (
+                    DEFAULT_HTTPS_PORT
+                    if parts.scheme in TLS_SCHEMES
+                    else DEFAULT_HTTP_PORT
+                )
+                host_value = (
+                    f"{host}:{parts.port}"
+                    if parts.port and parts.port != default_port
+                    else host
+                )
+                _append_http_header(args, f"Host: {host_value}")
+
+        server_str = str(server)
+        using_proxy = bool(args.get("http-proxy") or args.get("p"))
+
+        # Connect directly to the pre-resolved IP so wstunnel does not rely on
+        # OS/tunnel DNS at runtime (which fails on Windows or after WG starts).
+        if (
+            host
+            and endpoint_ip
+            and not using_proxy
+            and not _is_ip_address(host)
+        ):
+            parts = urlsplit(server_str)
+            server_str = _replace_server_host(server_str, endpoint_ip)
+
+            if (
+                parts.scheme in TLS_SCHEMES
+                and not args.get("tls-sni-override")
+                and not args.get("tls-sni-disable")
+            ):
+                args["tls-sni-override"] = host
+
+            if not args.get("http-headers-file") and not _has_host_header(args):
+                default_port = (
+                    DEFAULT_HTTPS_PORT
+                    if parts.scheme in TLS_SCHEMES
+                    else DEFAULT_HTTP_PORT
+                )
+                host_value = (
+                    f"{host}:{parts.port}"
+                    if parts.port and parts.port != default_port
+                    else host
+                )
+                _append_http_header(args, f"Host: {host_value}")
 
         wst_args = [exec_path, "client"]
 
@@ -105,7 +227,7 @@ class WstunnelConfig:
             else:
                 wst_args.append(f"{flag}{arg_name}={arg_data}")
 
-        wst_args.append(str(server))
+        wst_args.append(server_str)
 
         return wst_args
 
@@ -167,9 +289,7 @@ class WstunnelConfig:
             os.replace(tmp_file, cache_file)
         except OSError:
             # The cache is a best-effort fallback when DNS is unavailable.
-            logger.warning(
-                "Unable to write DNS cache to %s", cache_file, exc_info=True
-            )
+            logger.warning("Unable to write DNS cache to %s", cache_file, exc_info=True)
 
     @staticmethod
     def _resolve_host(host: str) -> str | None:
