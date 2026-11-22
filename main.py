@@ -27,6 +27,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="clean wireguard tunnels that were not properly stopped",
         action="store_true",
     )
+    parser.add_argument(
+        "--gui",
+        help="start with the system tray GUI",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--auto-connect",
+        help="connect automatically when the tray GUI starts",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--detached",
+        help="detach and run the tray GUI in the background",
+        action="store_true",
+    )
     return parser.parse_args(argv)
 
 
@@ -47,6 +62,21 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.clean:
             return 0 if clean_wireguard(config) else 1
+
+        if args.gui:
+            from gui import TrayApp, detach_to_background
+
+            if args.detached:
+                detach_to_background(argv)
+
+            app = Application(config)
+            TrayApp(
+                app,
+                config=config,
+                config_path=args.config,
+                auto_connect=args.auto_connect,
+            ).run()
+            return 0
 
         Application(config).run()
         return 0

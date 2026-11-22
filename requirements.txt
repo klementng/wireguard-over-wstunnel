@@ -1,4 +1,6 @@
+Pillow==11.0.0
 psutil==7.2.2
+pystray==0.19.5
 PyYAML==6.0.4
 requests==2.34.2
 wgconfig==1.2.0

@@ -15,15 +15,15 @@ jobs:
         include:
           - os: macos-latest
             TARGET: macos_arm64
-            PYI_FLAGS: ""
+            PYI_FLAGS: "--hidden-import=pystray._darwin --hidden-import=AppKit"
 
           - os: windows-latest
             TARGET: windows_x86_64
-            PYI_FLAGS: "--uac-admin"
+            PYI_FLAGS: "--uac-admin --hide-console hide-late --hidden-import=pystray._win32"
 
           - os: ubuntu-latest
             TARGET: linux_x86_64
-            PYI_FLAGS: ""
+            PYI_FLAGS: "--hidden-import=pystray._xorg --hidden-import=pystray._gtk --hidden-import=pystray._appindicator"
 
     steps:
       - uses: actions/checkout@v4
