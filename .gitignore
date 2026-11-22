@@ -165,3 +165,4 @@ dns.json
 .opencode
 conf/
 output.log.*
+.DS_Store
