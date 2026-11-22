@@ -33,28 +33,35 @@ class WireguardProcess(Process):
     def get_status(self) -> str:
         return "running" if self.is_running else "stopped"
 
-    def _read_runtime_interface(self) -> str:
+    def _runtime_name_path(self, iface_name: str) -> str:
+        return os.path.join(WIREGUARD_RUN_DIR, f"{iface_name}.name")
+
+    def _read_runtime_interface(self, iface_name: str) -> str:
         """macOS wg-quick creates a utunN device and records its name here."""
         try:
-            with open(self.config.runtime_name_file, encoding="utf-8") as file:
+            with open(self._runtime_name_path(iface_name), encoding="utf-8") as file:
                 return file.read().strip()
         except OSError:
             return ""
 
-    @property
-    def interface_name(self) -> str | None:
-        """Return the actual interface name, which differs from the config name on macOS."""
+    def _resolve_interface(self, iface_name: str) -> str | None:
+        """Return the live device name for a configured interface, if any."""
         interfaces = psutil.net_if_addrs()
 
         if platform.system() == "Darwin":
-            runtime_name = self._read_runtime_interface()
+            runtime_name = self._read_runtime_interface(iface_name)
             if runtime_name and runtime_name in interfaces:
                 return runtime_name
+            return None
 
-        if self.config.iface_name in interfaces:
-            return self.config.iface_name
-
+        if iface_name in interfaces:
+            return iface_name
         return None
+
+    @property
+    def interface_name(self) -> str | None:
+        """Return the actual interface name, which differs from the config name on macOS."""
+        return self._resolve_interface(self.config.iface_name)
 
     @property
     def is_running(self) -> bool:
@@ -100,41 +107,97 @@ class WireguardProcess(Process):
         for line in output.splitlines():
             logger.debug("wg-quick: %s", line)
 
+    def _remove_runtime_files(self, iface_name: str) -> None:
+        """Delete wg-quick runtime files that outlive a dead wireguard-go daemon.
+
+        When wireguard-go is killed (for example by Ctrl+C), macOS keeps the
+        ``<iface>.name`` and ``<utun>.sock`` files behind. ``wg-quick down`` then
+        refuses to run because the interface no longer exists, so they have to be
+        removed manually or every later start reports a leftover tunnel.
+        """
+        if platform.system() != "Darwin":
+            return
+
+        runtime_name = self._read_runtime_interface(iface_name)
+        paths = [self._runtime_name_path(iface_name)]
+        if runtime_name:
+            paths.append(os.path.join(WIREGUARD_RUN_DIR, f"{runtime_name}.sock"))
+
+        for path in paths:
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                continue
+            except OSError as e:
+                logger.warning("Unable to remove stale file '%s': %s", path, e)
+            else:
+                logger.debug("Removed stale wireguard runtime file '%s'", path)
+
+    def _force_down(self, iface_name: str, device: str) -> bool:
+        """Last-resort teardown for macOS when wg-quick cannot run.
+
+        wireguard-go watches its UAPI socket and shuts down when the file is
+        removed, which also releases the utun device.
+        """
+        if platform.system() != "Darwin":
+            return False
+
+        logger.warning(
+            "Falling back to removing wireguard runtime files for '%s'", iface_name
+        )
+        self._remove_runtime_files(iface_name)
+        return self._wait_until_removed(device)
+
     def _down(self, args: list[str], iface_name: str) -> bool:
+        device = self._resolve_interface(iface_name)
+
         try:
-            self._log_output(command.run(args))
+            self._log_output(command.run(args, new_session=True))
         except SUBPROCESS_ERRORS as e:
+            if self._resolve_interface(iface_name) is None:
+                # The daemon is already gone; wg-quick reports it as "not a
+                # WireGuard interface". Treat it as a successful teardown.
+                logger.debug(
+                    "Interface '%s' is already gone, cleaning up leftovers",
+                    iface_name,
+                )
+                self._remove_runtime_files(iface_name)
+                return True
+
             logger.error(
                 "Unable to remove interface '%s': %s",
                 iface_name,
                 command.describe_error(e),
             )
+            return device is not None and self._force_down(iface_name, device)
+
+        if device is not None and not self._wait_until_removed(device):
+            if self._force_down(iface_name, device):
+                return True
+
+            logger.error("Interface '%s' is still present", device)
             return False
 
-        if not self._wait_until_removed(iface_name):
-            logger.error("Interface '%s' is still present", iface_name)
-            return False
-
+        self._remove_runtime_files(iface_name)
         return True
 
     def reset(self) -> bool:
-        """Remove our tunnel and any leftover wg-wst-* interfaces."""
+        """Remove leftover tunnels and stale runtime files from previous runs."""
         ok = True
-        current = self.interface_name
 
-        if current is not None:
-            logger.warning(
-                "Found unstopped wireguard tunnel '%s', removing...", current
-            )
-            ok = self._down(self.config.exec_down_args, current)
-
-        handled = {current} if current else set()
         for iface_name in self._installed_interfaces():
-            if iface_name in handled:
+            device = self._resolve_interface(iface_name)
+            if device is None:
+                logger.warning(
+                    "Removing stale wireguard runtime files for '%s'", iface_name
+                )
+                self._remove_runtime_files(iface_name)
                 continue
 
             logger.warning(
-                "Found unstopped wireguard interface '%s', removing...", iface_name
+                "Found unstopped wireguard interface '%s' (%s), removing...",
+                iface_name,
+                device,
             )
             if not self._down(self.config.exec_down_args_for(iface_name), iface_name):
                 ok = False
@@ -146,7 +209,10 @@ class WireguardProcess(Process):
         logger.info("Starting wireguard...")
 
         try:
-            result = command.run(self.config.exec_up_args)
+            # Run in a separate session: wireguard-go is daemonized but inherits
+            # our process group, so Ctrl+C would otherwise kill the tunnel before
+            # stop() gets a chance to remove it properly.
+            result = command.run(self.config.exec_up_args, new_session=True)
             self._log_output(result)
         except SUBPROCESS_ERRORS as e:
             raise WireguardRuntimeError(
@@ -165,21 +231,16 @@ class WireguardProcess(Process):
     def stop(self) -> None:
         current = self.interface_name
         if current is None:
+            # Ctrl+C may have already killed wireguard-go, so wg-quick can no
+            # longer tear the tunnel down; at least remove what it left behind.
+            self._remove_runtime_files(self.config.iface_name)
             return
 
         logger.info("Stopping wireguard (interface: %s)...", current)
 
-        try:
-            result = command.run(self.config.exec_down_args)
-            self._log_output(result)
-        except SUBPROCESS_ERRORS as e:
+        if not self._down(self.config.exec_down_args, self.config.iface_name):
             raise WireguardRuntimeError(
-                f"Unable to stop wireguard: {command.describe_error(e)}"
-            ) from e
-
-        if not self._wait_until_removed(current):
-            raise WireguardRuntimeError(
-                f"Interface '{current}' is still present after stop"
+                f"Unable to stop wireguard (interface: '{current}')"
             )
 
         logger.info("Stopped wireguard!")
