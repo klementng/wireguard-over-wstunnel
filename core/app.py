@@ -89,7 +89,12 @@ class Application:
         self.request_stop()
 
     def _install_signal_handlers(self) -> None:
-        for sig in (signal.SIGINT, signal.SIGTERM):
+        signals = [signal.SIGINT, signal.SIGTERM]
+        if hasattr(signal, "SIGHUP"):
+            # Clean up when the terminal or SSH session goes away.
+            signals.append(signal.SIGHUP)
+
+        for sig in signals:
             try:
                 self._previous_handlers[sig] = signal.getsignal(sig)
                 signal.signal(sig, self._handle_signal)

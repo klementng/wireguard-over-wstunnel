@@ -29,11 +29,6 @@ class WireguardConfig:
     conf_path: str
     conf: "WGConfig | None"
 
-    @property
-    def runtime_name_file(self) -> str:
-        """File where wg-quick on macOS stores the real utun interface name."""
-        return os.path.join(WIREGUARD_RUN_DIR, f"{self.iface_name}.name")
-
     @classmethod
     def init(
         cls, config: dict, wst_config: "WstunnelConfig | None" = None
