@@ -4,6 +4,34 @@
 
 This is a Python application that quickly and easily enables the use of Wireguard over TCP using [wstunnel](https://github.com/erebe/wstunnel). It can run in headless CLI mode or as a lightweight cross-platform system tray app (`--gui`).
 
+## How It Works
+
+WireGuard normally uses UDP, which can be blocked or throttled on restrictive networks. This app wraps WireGuard's UDP packets inside an encrypted WebSocket/TLS (`wss://`) connection over TCP port 443 (or any configured port) via `wstunnel`:
+
+```mermaid
+flowchart LR
+    subgraph Client["Client Machine"]
+        APP["Client Traffic"] --> WG["WireGuard"]
+        WG -- "UDP (127.0.0.1:51820)" --> WST_C["wstunnel client"]
+    end
+
+    WST_C -- "WSS / TCP 443" --> WST_S["wstunnel server"]
+
+    subgraph Server["Remote Server"]
+        WST_S -- "UDP (127.0.0.1:51820)" --> WG_S["WireGuard server"]
+        WG_S --> NET["Internet / LAN"]
+    end
+```
+
+On startup, the app automatically handles the wiring so you don't have to manage routes or configs manually.
+
+Features:
+
+1. **Resolves the server DNS** (also cached in `conf/dns.json`) and passes the resolved IP directly to `wstunnel` along with the matching TLS SNI and HTTP `Host` header, avoiding DNS deadlocks once the VPN is active.
+2. **Generates a runtime WireGuard config** in `conf/` that points `Endpoint` to the local `wstunnel` listener and excludes the server's IP from `AllowedIPs` to prevent routing loops.
+3. **Starts `wstunnel` before WireGuard** and runs background health checks (tunnel state, ping, and public IP verification) with automatic recovery.
+4. **Tears down cleanly on exit** (or via `--clean`) to remove the WireGuard interface and stop `wstunnel`.
+
 ## Getting Started
 
 ### Prerequisites
@@ -18,15 +46,14 @@ This script requires the following software to be installed/downloaded:
 
 To create a standalone binary using PyInstaller, follow these steps:
 
-3. Download the latest [release](https://github.com/klementng/wireguard-over-wstunnel/releases/) source code or clone the repository.
-4. Install build dependencies:
+1. Download the latest [release](https://github.com/klementng/wireguard-over-wstunnel/releases/) source code or clone the repository.
+2. Install build dependencies:
 
    ```bash
    python -m pip install -r requirements-build.txt
    ```
 
-6. Build the binary for your platform:
-
+3. Build the binary for your platform:
 
    - **macOS:**
 
@@ -46,22 +73,21 @@ To create a standalone binary using PyInstaller, follow these steps:
      python -m PyInstaller main.py --onefile --hidden-import=pystray._xorg --hidden-import=pystray._gtk --hidden-import=pystray._appindicator
      ```
 
-7. The output binary will be located in the `dist` directory.
+4. The output binary will be located in the `dist` directory.
 
 ### Installation
 
 #### Using PyInstaller Binaries
 
 1. Download the latest [release](https://github.com/klementng/wireguard-over-wstunnel/releases/) binary.
-3. Change permissions (for Linux/macOS systems):
-
+2. Change permissions (for Linux/macOS systems):
 
    ```sh
    chmod +x ./main
    ```
 
-6. Edit [config.yml](./config.yml).
-7. Start the program (on Windows, double-clicking `main.exe` automatically starts the system tray GUI):
+3. Edit [config.yml](./config.yml).
+4. Start the program (on Windows, double-clicking `main.exe` automatically starts the system tray GUI):
 
    ```sh
    # CLI mode
@@ -73,15 +99,15 @@ To create a standalone binary using PyInstaller, follow these steps:
 
 #### Using Source Code
 
-4. Download the latest [release](https://github.com/klementng/wireguard-over-wstunnel/releases/) source code or clone the repository.
-5. Install required packages:
+1. Download the latest [release](https://github.com/klementng/wireguard-over-wstunnel/releases/) source code or clone the repository.
+2. Install required packages:
 
    ```sh
    pip install -r requirements.txt
    ```
 
-8. Edit [config.yml](./config.yml).
-9. Start the program:
+3. Edit [config.yml](./config.yml).
+4. Start the program:
 
    ```sh
    # CLI mode
