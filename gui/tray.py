@@ -60,6 +60,39 @@ def _format_error(message: str, limit: int = 80) -> str:
     return f"{single_line[: limit - 3]}..."
 
 
+def _icon_class() -> type[pystray.Icon]:
+    """Return a pystray.Icon class that opens the menu on left-click across platforms."""
+    base = pystray.Icon
+
+    # Windows (_win32): route left-click to the popup menu handler.
+    if hasattr(base, "_on_notify"):
+
+        class _Win32MenuIcon(base):
+            def _on_notify(self, wparam, lparam):
+                from pystray._util import win32
+
+                if lparam == win32.WM_LBUTTONUP:
+                    lparam = win32.WM_RBUTTONUP
+                return super()._on_notify(wparam, lparam)  # type: ignore[misc]
+
+        return _Win32MenuIcon
+
+    # Linux GTK (_gtk): route left-click activate to the popup menu handler.
+    if hasattr(base, "_on_status_icon_activate") and hasattr(
+        base, "_on_status_icon_popup_menu"
+    ):
+
+        class _GtkMenuIcon(base):
+            def _on_status_icon_activate(self, status_icon):
+                self._on_status_icon_popup_menu(status_icon, 0, 0)  # type: ignore[misc]
+
+        return _GtkMenuIcon
+
+    # macOS (_darwin) and Linux AppIndicator (_appindicator) open the menu on
+    # left-click natively.
+    return base
+
+
 class TrayApp:
     """Minimal system tray UI for controlling an Application instance."""
 
@@ -355,7 +388,7 @@ class TrayApp:
                     "Disconnect" if self._state == TunnelState.CONNECTED else "Connect"
                 ),
                 self._on_toggle,
-                default=True,
+                default=not pystray.Icon.HAS_MENU,
                 enabled=lambda _item: (
                     not self._is_busy
                     and not self._quitting
@@ -439,7 +472,8 @@ class TrayApp:
         if self.hide_taskbar:
             hide_from_taskbar()
 
-        self._icon = pystray.Icon(
+        icon_cls = _icon_class()
+        self._icon = icon_cls(
             APP_NAME,
             icon=self._icons[self._state],
             title=self._build_title(),
