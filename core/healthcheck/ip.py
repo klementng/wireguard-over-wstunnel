@@ -19,12 +19,18 @@ class HealthCheckIP(HealthCheckProcess):
         self.start_ip: str | None = None
         self.runs = 0
 
-    def start(self) -> None:
+    def capture_baseline(self) -> None:
+        """Capture the public IP before WireGuard changes the routing table."""
         if not self.enabled:
             return
 
-        # Baseline the public IP after the tunnel has been started.
         self.start_ip = self.fetch_ip()
+        if self.start_ip is None:
+            logger.warning("Unable to capture the public IP before tunnel startup")
+        else:
+            logger.info("Public IP before tunnel startup: %s", self.start_ip)
+
+    def start(self) -> None:
         self.runs = 0
         super().start()
 
@@ -38,9 +44,7 @@ class HealthCheckIP(HealthCheckProcess):
             self.runs += 1
 
             if result or self.runs >= self.max_retries:
-                logger.debug(
-                    "Stopping IP health check based on result or max retries."
-                )
+                logger.debug("Stopping IP health check based on result or max retries.")
                 self.status = "exited"
         except Exception:
             logger.exception("Error in IP monitor")
@@ -65,10 +69,10 @@ class HealthCheckIP(HealthCheckProcess):
         if self.start_ip is None:
             self.status_msg = "unknown"
             logger.warning(
-                "Unknown Status! Unable to compare old IP with new IP. "
-                "Your traffic may not be tunneled!"
+                "Current public IP: %s. No pre-tunnel IP is available to verify a change.",
+                new_ip,
             )
-            return True
+            return False
 
         if self.start_ip == new_ip:
             self.status_msg = "unchanged"

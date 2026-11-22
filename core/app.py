@@ -38,19 +38,16 @@ class Application:
 
         self.wstunnel = WstunnelProcess(wst_config)
         self.wireguard = WireguardProcess(wg_config)
+        self.ip_check = HealthCheckIP(
+            health_configs["ip"], self.wireguard, self.wstunnel
+        )
 
         self.processes: list[Process] = [
             self.wstunnel,  # transport first
             self.wireguard,
-            HealthCheckPing(
-                health_configs["ping"], self.wireguard, self.wstunnel
-            ),
-            HealthCheckState(
-                health_configs["state"], self.wireguard, self.wstunnel
-            ),
-            HealthCheckIP(
-                health_configs["ip"], self.wireguard, self.wstunnel
-            ),
+            HealthCheckPing(health_configs["ping"], self.wireguard, self.wstunnel),
+            HealthCheckState(health_configs["state"], self.wireguard, self.wstunnel),
+            self.ip_check,
         ]
 
     def request_stop(self) -> None:
@@ -61,13 +58,13 @@ class Application:
         started: list[Process] = []
 
         try:
+            self.ip_check.capture_baseline()
             for process in self.processes:
                 process.start()
                 started.append(process)
         except Exception:
             logger.exception(
-                "Unable to start %s, stopping all processes",
-                process.__class__.__name__,
+                "Unable to start tunnel, stopping all processes",
             )
             self._stop_processes(reversed(started))
             self._stopped = True
@@ -85,9 +82,7 @@ class Application:
             try:
                 process.stop()
             except Exception as e:
-                logger.error(
-                    "Error stopping %s: %s", process.__class__.__name__, e
-                )
+                logger.error("Error stopping %s: %s", process.__class__.__name__, e)
 
     def _handle_signal(self, signum, _frame) -> None:
         logger.info("Received signal %s, shutting down...", signum)
